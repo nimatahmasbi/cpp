@@ -1,6 +1,6 @@
 jQuery(document).ready(function ($) {
 
-    // --- ۱. مدیریت آکاردئون ---
+    // --- ۱. آکاردئون (بسته بودن پیش‌فرض) ---
     $('.cpp-accordion-header').on('click', function () {
         $(this).toggleClass('active').next('.cpp-accordion-content').slideToggle(300);
     });
@@ -18,7 +18,7 @@ jQuery(document).ready(function ($) {
         }
     }
 
-    // --- ۲. مدیریت آپلود عکس ---
+    // --- ۲. آپلود عکس ---
     var mediaUploader;
     $(document).on('click', '.cpp-upload-btn', function (e) {
         e.preventDefault();
@@ -33,8 +33,8 @@ jQuery(document).ready(function ($) {
         if (!input_field.length) return;
 
         mediaUploader = wp.media({
-            title: 'انتخاب یا آپلود تصویر',
-            button: { text: 'استفاده از این تصویر' },
+            title: 'انتخاب تصویر',
+            button: { text: 'استفاده از تصویر' },
             multiple: false
         });
 
@@ -67,13 +67,9 @@ jQuery(document).ready(function ($) {
             var current_value = cell.data('current');
             input_element = $('<select>').addClass('cpp-quick-edit-input');
              var options_list = {};
-             if (table_type === 'orders') {
-                 options_list = cpp_admin_vars.order_statuses || {};
-             } else if (table_type === 'products' && field === 'is_active') {
-                  options_list = cpp_admin_vars.product_statuses || {};
-             } else {
-                 input_element = $('<input type="text">').addClass('cpp-quick-edit-input').val(original_text_content);
-             }
+             if (table_type === 'orders') options_list = cpp_admin_vars.order_statuses || {};
+             else if (table_type === 'products' && field === 'is_active') options_list = cpp_admin_vars.product_statuses || {};
+             else input_element = $('<input type="text">').addClass('cpp-quick-edit-input').val(original_text_content);
 
             if(input_element.is('select')){
                 $.each(options_list, function (val, text) {
@@ -133,54 +129,34 @@ jQuery(document).ready(function ($) {
              }
          });
          $(input_element).find('input, select, textarea').on('keydown', function (e) {
-            if (e.key === 'Escape') {
-                cancel_btn.click();
-            } else if (e.key === 'Enter' && !$(this).is('textarea')) {
-                 e.preventDefault();
-                 save_btn.click();
-             }
+            if (e.key === 'Escape') { cancel_btn.click(); } 
+            else if (e.key === 'Enter' && !$(this).is('textarea')) { e.preventDefault(); save_btn.click(); }
         });
     });
 
     function performSavePriceRange(td, id, table_type) {
         var min_input = td.find('input[data-field="min_price"]');
         var max_input = td.find('input[data-field="max_price"]');
-        
         var min_value = min_input.val();
         var max_value = max_input.val();
         var original_html = td.data('original-content');
 
-        td.html(cpp_admin_vars.i18n.saving || 'در حال ذخیره...');
+        td.html('ذخیره...');
 
-        var promise1 = $.post(cpp_admin_vars.ajax_url, {
-            action: 'cpp_quick_update', security: cpp_admin_vars.nonce, id: id, field: 'min_price', value: min_value, table_type: table_type
-        });
-        var promise2 = $.post(cpp_admin_vars.ajax_url, {
-            action: 'cpp_quick_update', security: cpp_admin_vars.nonce, id: id, field: 'max_price', value: max_value, table_type: table_type
-        });
+        var p1 = $.post(cpp_admin_vars.ajax_url, { action: 'cpp_quick_update', security: cpp_admin_vars.nonce, id: id, field: 'min_price', value: min_value, table_type: table_type });
+        var p2 = $.post(cpp_admin_vars.ajax_url, { action: 'cpp_quick_update', security: cpp_admin_vars.nonce, id: id, field: 'max_price', value: max_value, table_type: table_type });
 
-        $.when(promise1, promise2).done(function (res1, res2) {
+        $.when(p1, p2).done(function (r1, r2) {
             td.removeClass('editing-td');
-            var response1 = res1[0];
-            var response2 = res2[0];
-
-            if (response1.success && response2.success) {
-                var new_min_span = $('<span>').addClass('cpp-quick-edit').attr('data-id', id).attr('data-field', 'min_price').attr('data-table-type', table_type).text(min_value);
-                var new_max_span = $('<span>').addClass('cpp-quick-edit').attr('data-id', id).attr('data-field', 'max_price').attr('data-table-type', table_type).text(max_value);
-                td.html('').append(new_min_span).append(' - ').append(new_max_span);
-
-                if (response1.data.new_time || response2.data.new_time) {
-                    td.closest('tr').find('.cpp-last-update').text(response1.data.new_time || response2.data.new_time);
-                }
+            if (r1[0].success && r2[0].success) {
+                var s1 = $('<span>').addClass('cpp-quick-edit').attr('data-id', id).attr('data-field', 'min_price').attr('data-table-type', table_type).text(min_value);
+                var s2 = $('<span>').addClass('cpp-quick-edit').attr('data-id', id).attr('data-field', 'max_price').attr('data-table-type', table_type).text(max_value);
+                td.html('').append(s1).append(' - ').append(s2);
+                if (r1[0].data.new_time) td.closest('tr').find('.cpp-last-update').text(r1[0].data.new_time);
             } else {
-                 alert('خطا در ذخیره سازی.');
-                 td.html(original_html);
+                 alert('خطا در ذخیره.'); td.html(original_html);
             }
-        }).fail(function () {
-             td.removeClass('editing-td');
-             alert('خطای سرور');
-             td.html(original_html);
-        });
+        }).fail(function () { td.removeClass('editing-td'); alert('خطای سرور'); td.html(original_html); });
     }
 
     function performSave(cell, id, field, table_type) {
@@ -188,221 +164,112 @@ jQuery(document).ready(function ($) {
         var new_value = inputField.val();
         var original_html = cell.data('original-content');
 
-        cell.html(cpp_admin_vars.i18n.saving || 'در حال ذخیره...');
+        cell.html('ذخیره...');
         $.post(cpp_admin_vars.ajax_url, {
             action: 'cpp_quick_update', security: cpp_admin_vars.nonce, id: id, field: field, value: new_value, table_type: table_type
         }, function (response) {
             cell.removeClass('editing');
             if (response.success) {
-                var display_html_or_text;
+                var display_val = response.data.display_value || new_value; 
                 if (cell.hasClass('cpp-quick-edit-select')) {
-                     var options_list = {};
-                     if (table_type === 'orders') options_list = cpp_admin_vars.order_statuses || {};
-                     else if (table_type === 'products' && field === 'is_active') options_list = cpp_admin_vars.product_statuses || {};
-                     display_html_or_text = options_list[new_value] || new_value;
-                     cell.data('current', new_value);
-                     cell.html(display_html_or_text); 
-                } else {
-                     display_html_or_text = new_value.replace(/\n/g, '<br>');
-                     cell.html(display_html_or_text); 
+                     var opts = (table_type === 'orders') ? cpp_admin_vars.order_statuses : cpp_admin_vars.product_statuses;
+                     display_val = opts[new_value] || new_value;
                 }
-                if (response.data && response.data.new_time) { 
-                    cell.closest('tr').find('.cpp-last-update').text(response.data.new_time);
-                }
+                cell.data('current', new_value).html(display_val);
+                if (response.data.new_time) cell.closest('tr').find('.cpp-last-update').text(response.data.new_time);
             } else {
-                 alert('خطا: ' + (response.data.message || 'Unknown error'));
-                 cell.html(original_html);
+                 alert('خطا: ' + (response.data.message || 'Error')); cell.html(original_html);
             }
-        }).fail(function () {
-             cell.removeClass('editing');
-             alert('خطای سرور');
-             cell.html(original_html);
-        });
+        }).fail(function () { cell.removeClass('editing'); alert('خطای سرور'); cell.html(original_html); });
     }
 
-    // --- ۴. مدیریت پاپ‌آپ‌ها ---
+    // --- ۴. پاپ‌آپ‌ها ---
     function openEditModal(ajax_data) {
         if ($('#cpp-edit-modal').length === 0) {
             $('body').append('<div id="cpp-edit-modal" class="cpp-modal-overlay" style="display: none;"><div class="cpp-modal-container"><span class="cpp-close-modal">×</span><div class="cpp-edit-modal-content"></div></div></div>');
         }
         var modal = $('#cpp-edit-modal');
-        var modalContent = modal.find('.cpp-edit-modal-content');
+        modal.css('display', 'flex').addClass('loading').find('.cpp-edit-modal-content').html('<p style="text-align:center;padding:20px;">بارگذاری...</p>');
 
-        modal.css('display', 'flex').addClass('loading');
-        modalContent.html('<p style="text-align:center; padding: 20px;">' + (cpp_admin_vars.i18n.loadingForm || 'در حال بارگذاری...') + '</p>');
-
-        $.get(cpp_admin_vars.ajax_url, ajax_data)
-            .done(function (response) {
-                modal.removeClass('loading');
-                if (response.success && response.data && response.data.html) {
-                    modalContent.html(response.data.html);
-                    if (typeof window.cpp_init_media_uploader === 'function') window.cpp_init_media_uploader();
-                    if (modalContent.find('.cpp-color-picker').length > 0) modalContent.find('.cpp-color-picker').wpColorPicker();
-                } else {
-                     modalContent.html('<p style="color:red; text-align:center;">' + (response.data.message || 'خطا در بارگذاری') + '</p>');
-                }
-            })
-            .fail(function (jqXHR, textStatus) {
-                 modal.removeClass('loading');
-                 modalContent.html('<p style="color:red; text-align:center;">خطای سرور: ' + textStatus + '</p>');
-            });
+        $.get(cpp_admin_vars.ajax_url, ajax_data).done(function (res) {
+            modal.removeClass('loading');
+            if (res.success) {
+                modal.find('.cpp-edit-modal-content').html(res.data.html);
+                if (typeof window.cpp_init_media_uploader === 'function') window.cpp_init_media_uploader();
+                if (modal.find('.cpp-color-picker').length) modal.find('.cpp-color-picker').wpColorPicker();
+            } else {
+                 modal.find('.cpp-edit-modal-content').html('<p style="color:red;text-align:center;">' + (res.data.message || 'خطا') + '</p>');
+            }
+        }).fail(function () { modal.removeClass('loading').find('.cpp-edit-modal-content').html('<p style="color:red;text-align:center;">خطای سرور</p>'); });
     }
 
-    $(document).on('click', '.cpp-close-modal', function () { 
-        $(this).closest('.cpp-modal-overlay').hide(); 
-        if (typeof chartInstance !== 'undefined' && chartInstance) { chartInstance.destroy(); chartInstance = null; }
-    });
-    
-    $(document).on('click', '.cpp-modal-overlay', function(e) { 
-        if ($(e.target).is('.cpp-modal-overlay')) { 
-            $(this).hide(); 
+    $(document).on('click', '.cpp-close-modal, .cpp-modal-overlay', function (e) {
+        if (e.target === this || $(this).hasClass('cpp-close-modal')) {
+            $('.cpp-modal-overlay').hide();
             if (typeof chartInstance !== 'undefined' && chartInstance) { chartInstance.destroy(); chartInstance = null; }
-        } 
+        }
     });
 
     $(document).on('click', '.cpp-edit-button, .cpp-edit-cat-button', function (e) {
-        e.preventDefault(); 
-        var button = $(this);
-        var ajax_data = { security: cpp_admin_vars.nonce };
-        if (button.hasClass('cpp-edit-button')) {
-            ajax_data.action = 'cpp_fetch_product_edit_form';
-            ajax_data.id = button.data('product-id');
-        } else {
-            ajax_data.action = 'cpp_fetch_category_edit_form';
-            ajax_data.id = button.data('cat-id');
-        }
-        openEditModal(ajax_data);
+        e.preventDefault();
+        var btn = $(this);
+        var data = { security: cpp_admin_vars.nonce };
+        if (btn.hasClass('cpp-edit-button')) { data.action = 'cpp_fetch_product_edit_form'; data.id = btn.data('product-id'); }
+        else { data.action = 'cpp_fetch_category_edit_form'; data.id = btn.data('cat-id'); }
+        openEditModal(data);
     });
 
-    // --- نمایش نمودار ---
     var chartInstance = null;
     $(document).on('click', '.cpp-show-chart', function (e) {
         e.preventDefault();
-        var productId = $(this).data('product-id');
+        var pid = $(this).data('product-id');
+        if ($('#cpp-chart-modal').length === 0) $('body').append('<div id="cpp-chart-modal" class="cpp-modal-overlay" style="display:none;"><div class="cpp-modal-container"><span class="cpp-close-modal">×</span><h2>نمودار قیمت</h2><div class="cpp-chart-modal-content"><canvas id="cppPriceChart"></canvas></div></div></div>');
         
-        if ($('#cpp-chart-modal').length === 0) {
-             $('body').append('<div id="cpp-chart-modal" class="cpp-modal-overlay" style="display:none;"><div class="cpp-modal-container"><span class="cpp-close-modal">×</span><h2>نمودار تغییرات قیمت</h2><div class="cpp-chart-modal-content"><canvas id="cppPriceChart" width="400" height="150"></canvas></div></div></div>');
-        }
         var modal = $('#cpp-chart-modal');
-        var chartCanvas = modal.find('#cppPriceChart');
-        var modalContent = modal.find('.cpp-chart-modal-content');
-
-        modal.css('display', 'flex'); 
-        modalContent.find('.chart-error, .chart-loading').remove();
-        chartCanvas.show();
+        var ctx = modal.find('#cppPriceChart');
+        modal.css('display', 'flex');
         
         if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
-        modalContent.append('<p class="chart-loading" style="text-align:center;">' + (cpp_admin_vars.i18n.loading || 'در حال بارگذاری...') + '</p>');
-
-        $.get(cpp_admin_vars.ajax_url, { action: 'cpp_get_chart_data', product_id: productId, security: cpp_admin_vars.nonce }, function (response) {
-            modalContent.find('.chart-loading').remove();
-            if (response.success && response.data && response.data.labels) {
-                 renderChart(response.data, chartCanvas[0]);
-             } else {
-                 chartCanvas.hide();
-                 var msg = (response.data && response.data.message) ? response.data.message : 'داده‌ای یافت نشد.';
-                 modalContent.prepend('<p class="chart-error" style="color:red; text-align:center;">' + msg + '</p>');
-             }
-        }).fail(function (jqXHR, textStatus) {
-             modalContent.find('.chart-loading').remove();
-             chartCanvas.hide();
-             modalContent.prepend('<p class="chart-error" style="color:red; text-align:center;">خطای سرور: ' + textStatus + '</p>');
-        });
+        
+        $.get(cpp_admin_vars.ajax_url, { action: 'cpp_get_chart_data', product_id: pid, security: cpp_admin_vars.nonce }).done(function (res) {
+            if (res.success && res.data.labels) {
+                 var ds = [];
+                 if (res.data.prices) ds.push({ label: 'قیمت پایه', data: res.data.prices, borderColor: 'rgb(75, 192, 192)', tension: 0.1, fill: false });
+                 if (res.data.min_prices) ds.push({ label: 'حداقل', data: res.data.min_prices, borderColor: 'red', borderDash: [5,5], fill: false });
+                 if (res.data.max_prices) ds.push({ label: 'حداکثر', data: res.data.max_prices, borderColor: 'blue', borderDash: [5,5], fill: false });
+                 
+                 chartInstance = new Chart(ctx, { type: 'line', data: { labels: res.data.labels, datasets: ds }, options: { responsive: true, spanGaps: true } });
+            } else {
+                 alert(res.data.message || 'داده‌ای یافت نشد'); modal.hide();
+            }
+        }).fail(function () { alert('خطای دریافت داده'); modal.hide(); });
     });
 
-    function renderChart(chartData, ctx) { 
-         var datasets = [];
-         if (chartData.prices && chartData.prices.filter(p => p !== null).length > 0) {
-             datasets.push({ label: 'قیمت پایه', data: chartData.prices, borderColor: 'rgb(75, 192, 192)', backgroundColor: 'rgba(75, 192, 192, 0.2)', tension: 0.3, fill: false, borderWidth: 2 });
-         }
-         if (chartData.min_prices && chartData.min_prices.filter(p => p !== null).length > 0) {
-             datasets.push({ label: 'حداقل قیمت', data: chartData.min_prices, borderColor: 'rgba(255, 99, 132, 0.7)', backgroundColor: 'rgba(255, 99, 132, 0.1)', tension: 0, borderDash: [5, 5], fill: '+1', pointRadius: 0, borderWidth: 1 });
-         }
-         if (chartData.max_prices && chartData.max_prices.filter(p => p !== null).length > 0) {
-             datasets.push({ label: 'حداکثر قیمت', data: chartData.max_prices, borderColor: 'rgba(54, 162, 235, 0.7)', backgroundColor: 'rgba(54, 162, 235, 0.1)', tension: 0, borderDash: [5, 5], fill: false, pointRadius: 0, borderWidth: 1 });
-         }
-         
-         if(datasets.length === 0){ 
-             $(ctx).parent().prepend('<p class="chart-error" style="color:red; text-align:center;">داده‌ای برای نمایش در نمودار وجود ندارد.</p>'); 
-             $(ctx).hide(); return; 
-         }
-         
-         try {
-             chartInstance = new Chart(ctx, { type: 'line', data: { labels: chartData.labels, datasets: datasets }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false } }, spanGaps: true } });
-         } catch (e) { console.error("Chart Error:", e); }
-     }
-
-    // --- ۵. ارسال فرم‌های ویرایش ---
+    // --- ۵. فرم‌ها ---
     $(document).on('submit', '#cpp-edit-product-form, #cpp-edit-category-form', function (e) {
         e.preventDefault();
         var form = $(this);
         var action = form.attr('id') === 'cpp-edit-product-form' ? 'cpp_handle_edit_product_ajax' : 'cpp_handle_edit_category_ajax';
-        var submit_button = form.find('input[type="submit"]');
+        var btn = form.find('input[type="submit"]');
+        btn.prop('disabled', true).val('در حال ذخیره...');
         
-        submit_button.prop('disabled', true).val('در حال ذخیره...');
-        form.find('.cpp-form-message').remove();
-
-        var form_data = form.serializeArray();
-        form_data.push({ name: 'action', value: action });
-
-        $.ajax({
-            url: cpp_admin_vars.ajax_url, type: 'POST', data: $.param(form_data),
-            success: function (response) {
-                if (response.success) {
-                    form.prepend('<div class="cpp-form-message notice notice-success is-dismissible"><p>' + (response.data.message || 'ذخیره شد') + '</p></div>');
-                    setTimeout(function () { $('#cpp-edit-modal').hide(); window.location.reload(); }, 1000);
-                } else {
-                    submit_button.prop('disabled', false).val('ذخیره تغییرات');
-                    form.prepend('<div class="cpp-form-message notice notice-error is-dismissible"><p>' + (response.data.message || 'خطا') + '</p></div>');
-                }
-            },
-            error: function (jqXHR, textStatus) {
-                 submit_button.prop('disabled', false).val('ذخیره تغییرات');
-                 form.prepend('<div class="cpp-form-message notice notice-error is-dismissible"><p>خطای سرور: ' + textStatus + '</p></div>');
-            }
-        });
-    });
-
-    // --- ۶. ابزارهای تنظیمات ---
-    $('#cpp-load-email-template').on('click', function () {
-        if (confirm('آیا مطمئنید؟')) {
-            var templateHtml = $('#cpp-email-template-html').html();
-            if (typeof tinymce !== 'undefined' && tinymce.get('cpp_email_body_template')) {
-                tinymce.get('cpp_email_body_template').setContent(templateHtml.trim());
+        $.post(cpp_admin_vars.ajax_url, form.serialize() + '&action=' + action, function(res){
+            if(res.success) {
+                alert('ذخیره شد'); $('#cpp-edit-modal').hide(); window.location.reload();
             } else {
-                $('#cpp_email_body_template').val(templateHtml.trim());
+                alert(res.data.message || 'خطا'); btn.prop('disabled', false).val('ذخیره');
             }
-        }
+        }).fail(function(){ alert('خطای سرور'); btn.prop('disabled', false).val('ذخیره'); });
     });
 
-    $('#cpp-test-email-btn').on('click', function () {
-        var button = $(this);
-        var logBox = $('#cpp-email-log');
-        button.prop('disabled', true).text('در حال ارسال...');
-        logBox.val('در حال ارسال...');
-
-        $.post(cpp_admin_vars.ajax_url, { action: 'cpp_test_email', security: cpp_admin_vars.nonce }, function (response) {
-            logBox.val(response.data.log);
-            button.prop('disabled', false).text('ارسال ایمیل تست');
-        }).fail(function (xhr) {
-            logBox.val('خطا: ' + xhr.responseText);
-            button.prop('disabled', false).text('ارسال ایمیل تست');
-        });
+    // --- ۶. دکمه‌های تست ---
+    $('#cpp-load-email-template').click(function(){ if(confirm('مطمئنید؟')) { var t = $('#cpp-email-template-html').html(); if(typeof tinymce!='undefined' && tinymce.get('cpp_email_body_template')) tinymce.get('cpp_email_body_template').setContent(t); else $('#cpp_email_body_template').val(t); } });
+    
+    $('#cpp-test-email-btn, #cpp-test-sms-btn').click(function(){
+        var btn = $(this), log = btn.siblings('textarea'), act = (btn.attr('id')==='cpp-test-email-btn')?'cpp_test_email':'cpp_test_sms';
+        btn.prop('disabled', true); log.val('ارسال...');
+        $.post(cpp_admin_vars.ajax_url, { action: act, security: cpp_admin_vars.nonce }, function(res){
+            log.val(res.data.log || JSON.stringify(res)); btn.prop('disabled', false);
+        }).fail(function(x){ log.val('خطا: '+x.responseText); btn.prop('disabled', false); });
     });
-
-    $('#cpp-test-sms-btn').on('click', function () {
-        var button = $(this);
-        var logBox = $('#cpp-sms-log');
-        button.prop('disabled', true).text('در حال ارسال...');
-        logBox.val('در حال ارسال...');
-
-        $.post(cpp_admin_vars.ajax_url, { action: 'cpp_test_sms', security: cpp_admin_vars.nonce }, function (response) {
-            logBox.val(response.data.log);
-            button.prop('disabled', false).text('ارسال پیامک تست');
-        }).fail(function (xhr) {
-            logBox.val('خطا: ' + xhr.responseText);
-            button.prop('disabled', false).text('ارسال پیامک تست');
-        });
-    });
-
 });
