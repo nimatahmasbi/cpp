@@ -93,6 +93,27 @@ class CPP_Core {
             ORDER BY change_time ASC
         ", $product_id, $date_limit));
 
+        // --- شروع تغییر: نمایش قیمت فعلی اگر تاریخچه‌ای نبود ---
+        if (empty($history)) {
+            $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
+            
+            if ($current_product) {
+                // اگر محصول قیمت دارد، یک نقطه روی نمودار ایجاد کن
+                $dummy_row = new stdClass();
+                $dummy_row->change_time = $current_product->last_updated_at;
+                // تبدیل رشته خالی به null برای سازگاری با منطق نمودار
+                $dummy_row->price = ($current_product->price !== '') ? $current_product->price : null;
+                $dummy_row->min_price = ($current_product->min_price !== '') ? $current_product->min_price : null;
+                $dummy_row->max_price = ($current_product->max_price !== '') ? $current_product->max_price : null;
+                
+                // فقط اگر حداقل یک قیمت وجود داشت، اضافه کن
+                if ($dummy_row->price !== null || $dummy_row->min_price !== null || $dummy_row->max_price !== null) {
+                    $history[] = $dummy_row;
+                }
+            }
+        }
+        // --- پایان تغییر ---
+
         if ($history) {
              $last_price = null;
              $last_min = null;
@@ -143,7 +164,7 @@ function cpp_ajax_get_captcha() {
     wp_die();
 }
 
-// --- مدیریت دریافت اطلاعات نمودار (اصلاح شده) ---
+// --- مدیریت دریافت اطلاعات نمودار (با بررسی امنیتی دوگانه) ---
 add_action('wp_ajax_cpp_get_chart_data', 'cpp_ajax_get_chart_data');
 add_action('wp_ajax_nopriv_cpp_get_chart_data', 'cpp_ajax_get_chart_data');
 function cpp_ajax_get_chart_data() {
@@ -170,7 +191,7 @@ function cpp_ajax_get_chart_data() {
     $data = CPP_Core::get_chart_data($product_id);
     
     if(empty($data['labels'])) {
-        wp_send_json_error(['message' => __('هنوز تاریخچه قیمتی برای این محصول ثبت نشده است.', 'cpp-full')], 404);
+        wp_send_json_error(['message' => __('هیچ قیمتی (فعلی یا تاریخچه) برای نمایش در نمودار یافت نشد.', 'cpp-full')], 404);
     } else {
         wp_send_json_success($data);
     }
