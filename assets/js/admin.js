@@ -1,18 +1,16 @@
 jQuery(document).ready(function ($) {
 
-    // آکاردئون
+    // --- بخش ۱: آکاردئون (اصلاح شده برای بسته بودن پیش‌فرض) ---
     $('.cpp-accordion-header').on('click', function () {
         $(this).toggleClass('active').next('.cpp-accordion-content').slideToggle(300);
     });
 
-    // بستن آکاردئون‌ها در بارگذاری اولیه صفحه (مگر اینکه خطایی داخلشان باشد)
-    // --- اصلاح: کدهای زیر از حالت کامنت خارج شدند ---
+    // اصلاح: این خطوط از حالت کامنت خارج شدند تا پنل‌ها در ابتدا بسته باشند
     if ($('.cpp-accordion-content').length && !$('.cpp-accordion-content').find('.error').length && !$('.cpp-accordion-content').is(':visible')) {
        $('.cpp-accordion-content').hide(); 
        $('.cpp-accordion-header').removeClass('active');
     }
     
-    // If hash exists, open corresponding accordion (useful for redirects with errors)
     if (window.location.hash) {
         var targetAccordion = $(window.location.hash);
         if (targetAccordion.hasClass('cpp-accordion-content')) {
@@ -22,7 +20,7 @@ jQuery(document).ready(function ($) {
     }
 
 
-    // مدیریت آپلود عکس
+    // --- بخش ۲: آپلود عکس ---
     var mediaUploader;
     $(document).on('click', '.cpp-upload-btn', function (e) {
         e.preventDefault();
@@ -57,11 +55,10 @@ jQuery(document).ready(function ($) {
             });
             mediaUploader.open();
         })(input_field, preview_img_container);
-
     });
 
 
-    // ویرایش سریع با دبل کلیک
+    // --- بخش ۳: ویرایش سریع (اصلاح مشکل تکست‌باکس و خطای سرور) ---
     $(document).on('dblclick', '.cpp-quick-edit, .cpp-quick-edit-select', function () {
         var cell = $(this);
         if (cell.hasClass('editing') || cell.closest('td').hasClass('editing-td')) return;
@@ -106,7 +103,7 @@ jQuery(document).ready(function ($) {
 
              var container = $('<div>');
              
-             // --- اصلاح: استفاده از attr به جای data برای شناسایی توسط سلکتور در تابع ذخیره ---
+             // اصلاح مهم: استفاده از attr به جای data برای اینکه در ذخیره سازی پیدا شوند
              var min_input = $('<input type="text">').addClass('cpp-quick-edit-input small-text').val(min_val).attr('data-field', 'min_price');
              var max_input = $('<input type="text">').addClass('cpp-quick-edit-input small-text').val(max_val).attr('data-field', 'max_price');
              
@@ -119,7 +116,7 @@ jQuery(document).ready(function ($) {
         } else {
             cell.data('original-content', original_html).addClass('editing');
             
-            // --- اصلاح: ایجاد صحیح المنت input یا textarea ---
+            // اصلاح مهم: ساخت صحیح تگ اینپوت (رفع مشکل عدم نمایش تکست باکس)
             if (field === 'admin_note' || field === 'description') {
                 input_element = $('<textarea>').addClass('cpp-quick-edit-input').val(original_text_content);
             } else {
@@ -159,7 +156,7 @@ jQuery(document).ready(function ($) {
     });
 
     function performSavePriceRange(td, id, table_type) {
-        // --- چون از attr استفاده کردیم، حالا این سلکتور درست کار می‌کند ---
+        // این بخش حالا به درستی کار می‌کند چون از attr استفاده کردیم
         var min_input = td.find('input[data-field="min_price"]');
         var max_input = td.find('input[data-field="max_price"]');
         
@@ -247,7 +244,7 @@ jQuery(document).ready(function ($) {
     }
 
 
-    // منطق پاپ‌آپ ویرایش
+    // --- بخش ۴: مدال‌های ویرایش و سایر ---
     $(document).on('click', '.cpp-edit-button, .cpp-edit-cat-button', function () {
         var button = $(this);
         var ajax_data = { security: cpp_admin_vars.nonce };
