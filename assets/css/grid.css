@@ -1,0 +1,20 @@
+/* Styles for Grid Shortcode */
+.cpp-grid-wrapper { display: flex; direction: rtl; gap: 20px; font-family: sans-serif; }
+.cpp-grid-sidebar { flex: 0 0 200px; }
+.cpp-grid-sidebar h3 { font-size: 18px; margin-bottom: 10px; }
+.cpp-grid-sidebar ul { list-style: none; padding: 0; margin: 0; border: 1px solid #eee; border-radius: 5px; }
+.cpp-grid-sidebar li a { display: block; padding: 10px; text-decoration: none; color: #333; border-bottom: 1px solid #eee; }
+.cpp-grid-sidebar li:last-child a { border-bottom: none; }
+.cpp-grid-sidebar li.active a, .cpp-grid-sidebar li a:hover { background-color: #f5f5f5; font-weight: bold; }
+.cpp-grid-container { flex: 1; }
+.cpp-grid-header, .cpp-grid-row { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
+.cpp-grid-header { font-weight: bold; background-color: #fafafa; }
+.col-name { flex: 3; }
+.col-type, .col-unit, .col-location, .col-price, .col-change { flex: 1.5; text-align: center; }
+.col-actions { flex: 1; text-align: left; }
+.col-price { font-weight: bold; color: #0073aa; }
+.col-change.positive { color: #28a745; }
+.col-change.negative { color: #dc3545; }
+.cpp-grid-btn { border: 1px solid #ddd; background: #fff; cursor: pointer; border-radius: 5px; padding: 5px 10px; margin: 0 2px; }
+.cpp-grid-btn.order-btn { background-color: #ffc107; border-color: #ffc107; }
+.cpp-grid-full-list-btn { background: #dc3545; color: #fff; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; }
