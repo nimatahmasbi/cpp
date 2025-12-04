@@ -3,7 +3,6 @@ if (!defined('ABSPATH')) exit;
 
 class CPP_Core {
 
-    // تابع برای شروع Session در صورت نیاز
     public static function init_session() {
         if (!session_id() && !headers_sent()) {
             try {
@@ -29,7 +28,6 @@ class CPP_Core {
         dbDelta($sql3);
         dbDelta($sql4);
 
-        // --- بررسی و آپدیت ساختار جداول قدیمی ---
         $table_name_history = CPP_DB_PRICE_HISTORY;
         if($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_name_history)) == $table_name_history) {
             $history_columns = $wpdb->get_col("DESC `{$table_name_history}`");
@@ -51,7 +49,6 @@ class CPP_Core {
              return false;
          }
          
-         // ثبت تاریخچه با زمان GMT
          $data_to_insert = [
              'product_id' => $product_id,
              'change_time' => current_time('mysql', 1), 
@@ -83,7 +80,6 @@ class CPP_Core {
         $min_prices = [];
         $max_prices = [];
 
-        // استفاده از محاسبه زمان در PHP
         $date_limit = date('Y-m-d H:i:s', strtotime("-{$months} months", current_time('timestamp', 1)));
 
          $history = $wpdb->get_results($wpdb->prepare("
@@ -93,26 +89,21 @@ class CPP_Core {
             ORDER BY change_time ASC
         ", $product_id, $date_limit));
 
-        // --- شروع تغییر: نمایش قیمت فعلی اگر تاریخچه‌ای نبود ---
+        // --- اصلاح: اگر تاریخچه خالی بود، قیمت فعلی را اضافه کن ---
         if (empty($history)) {
             $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
-            
             if ($current_product) {
-                // اگر محصول قیمت دارد، یک نقطه روی نمودار ایجاد کن
                 $dummy_row = new stdClass();
                 $dummy_row->change_time = $current_product->last_updated_at;
-                // تبدیل رشته خالی به null برای سازگاری با منطق نمودار
                 $dummy_row->price = ($current_product->price !== '') ? $current_product->price : null;
                 $dummy_row->min_price = ($current_product->min_price !== '') ? $current_product->min_price : null;
                 $dummy_row->max_price = ($current_product->max_price !== '') ? $current_product->max_price : null;
                 
-                // فقط اگر حداقل یک قیمت وجود داشت، اضافه کن
                 if ($dummy_row->price !== null || $dummy_row->min_price !== null || $dummy_row->max_price !== null) {
                     $history[] = $dummy_row;
                 }
             }
         }
-        // --- پایان تغییر ---
 
         if ($history) {
              $last_price = null;
@@ -146,13 +137,10 @@ class CPP_Core {
         if($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", CPP_DB_ORDERS)) != CPP_DB_ORDERS) return [];
         return $wpdb->get_results("SELECT * FROM " . CPP_DB_ORDERS . " ORDER BY created DESC");
     }
-
-} // End CPP_Core Class
-
+} 
 
 add_action('init', ['CPP_Core', 'init_session'], 1);
 
-// --- مدیریت کپچا ---
 add_action('wp_ajax_cpp_get_captcha', 'cpp_ajax_get_captcha');
 add_action('wp_ajax_nopriv_cpp_get_captcha', 'cpp_ajax_get_captcha');
 function cpp_ajax_get_captcha() {
@@ -164,19 +152,14 @@ function cpp_ajax_get_captcha() {
     wp_die();
 }
 
-// --- مدیریت دریافت اطلاعات نمودار (با بررسی امنیتی دوگانه) ---
 add_action('wp_ajax_cpp_get_chart_data', 'cpp_ajax_get_chart_data');
 add_action('wp_ajax_nopriv_cpp_get_chart_data', 'cpp_ajax_get_chart_data');
 function cpp_ajax_get_chart_data() {
-    // اصلاح: بررسی هر دو نانس (هم مدیریت و هم کاربری)
+    // اصلاح: بررسی امنیت دوگانه (ادمین و فرانت)
     $is_valid_nonce = false;
-    
-    // ۱. بررسی نانس ادمین (security)
     if (isset($_REQUEST['security']) && wp_verify_nonce($_REQUEST['security'], 'cpp_admin_nonce')) {
         $is_valid_nonce = true;
-    } 
-    // ۲. بررسی نانس کاربری (nonce)
-    elseif (isset($_REQUEST['nonce']) && wp_verify_nonce($_REQUEST['nonce'], 'cpp_front_nonce')) {
+    } elseif (isset($_REQUEST['nonce']) && wp_verify_nonce($_REQUEST['nonce'], 'cpp_front_nonce')) {
         $is_valid_nonce = true;
     }
 
@@ -191,15 +174,13 @@ function cpp_ajax_get_chart_data() {
     $data = CPP_Core::get_chart_data($product_id);
     
     if(empty($data['labels'])) {
-        wp_send_json_error(['message' => __('هیچ قیمتی (فعلی یا تاریخچه) برای نمایش در نمودار یافت نشد.', 'cpp-full')], 404);
+        wp_send_json_error(['message' => __('هیچ داده‌ای برای نمایش وجود ندارد.', 'cpp-full')], 404);
     } else {
         wp_send_json_success($data);
     }
     wp_die();
 }
 
-
-// --- مدیریت ثبت سفارش ---
 add_action('wp_ajax_cpp_submit_order', 'cpp_submit_order');
 add_action('wp_ajax_nopriv_cpp_submit_order', 'cpp_submit_order');
 function cpp_submit_order() {
@@ -212,7 +193,7 @@ function cpp_submit_order() {
     unset($_SESSION['cpp_captcha_code']);
     
     if (empty($user_captcha) || empty($session_captcha) || $user_captcha !== $session_captcha) {
-        wp_send_json_error(['message' => __('کد امنیتی وارد شده صحیح نیست.', 'cpp-full'), 'code' => 'captcha_error'], 400);
+        wp_send_json_error(['message' => __('کد امنیتی صحیح نیست.', 'cpp-full'), 'code' => 'captcha_error'], 400);
         wp_die();
     }
 
@@ -220,7 +201,7 @@ function cpp_submit_order() {
     $product = $wpdb->get_row($wpdb->prepare("SELECT name, unit, load_location FROM " . CPP_DB_PRODUCTS . " WHERE id=%d AND is_active = 1", $product_id));
     
     if (!$product) {
-        wp_send_json_error(['message' => __('محصول انتخاب شده یافت نشد.', 'cpp-full')], 404);
+        wp_send_json_error(['message' => __('محصول یافت نشد.', 'cpp-full')], 404);
         wp_die();
     }
 
@@ -230,7 +211,7 @@ function cpp_submit_order() {
     $note = isset($_POST['note']) ? sanitize_textarea_field(wp_unslash($_POST['note'])) : '';
 
     if(empty($customer_name) || empty($phone) || empty($qty)){
-        wp_send_json_error(['message' => __('لطفا تمام فیلدهای ستاره‌دار را پر کنید.', 'cpp-full')], 400);
+        wp_send_json_error(['message' => __('لطفا فیلدهای ستاره‌دار را پر کنید.', 'cpp-full')], 400);
         wp_die();
     }
 
@@ -251,13 +232,12 @@ function cpp_submit_order() {
     $inserted = $wpdb->insert(CPP_DB_ORDERS, $order_data, $order_formats);
 
     if (!$inserted) {
-         wp_send_json_error(['message' => __('خطا در ثبت سفارش در دیتابیس.', 'cpp-full')], 500);
+         wp_send_json_error(['message' => __('خطا در ثبت سفارش.', 'cpp-full')], 500);
          wp_die();
     }
 
     $order_id = $wpdb->insert_id;
 
-    // --- ارسال اعلان‌ها ---
     $admin_placeholders = [
         '{product_name}'  => $product->name,
         '{customer_name}' => $customer_name,
@@ -292,7 +272,7 @@ function cpp_submit_order() {
         }
     }
 
-    wp_send_json_success(['message' => __('درخواست شما با موفقیت ثبت شد.', 'cpp-full')]);
+    wp_send_json_success(['message' => __('درخواست شما ثبت شد.', 'cpp-full')]);
     wp_die();
 }
 ?>
