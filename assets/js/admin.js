@@ -4,12 +4,15 @@ jQuery(document).ready(function ($) {
     $('.cpp-accordion-header').on('click', function () {
         $(this).toggleClass('active').next('.cpp-accordion-content').slideToggle(300);
     });
+
     // بستن آکاردئون‌ها در بارگذاری اولیه صفحه (مگر اینکه خطایی داخلشان باشد)
+    // --- اصلاح: کدهای زیر از حالت کامنت خارج شدند ---
     if ($('.cpp-accordion-content').length && !$('.cpp-accordion-content').find('.error').length && !$('.cpp-accordion-content').is(':visible')) {
-       // $('.cpp-accordion-content').hide(); // Don't hide if it contains server-side rendered errors
-       // $('.cpp-accordion-header').removeClass('active');
+       $('.cpp-accordion-content').hide(); 
+       $('.cpp-accordion-header').removeClass('active');
     }
-     // If hash exists, open corresponding accordion (useful for redirects with errors)
+    
+    // If hash exists, open corresponding accordion (useful for redirects with errors)
     if (window.location.hash) {
         var targetAccordion = $(window.location.hash);
         if (targetAccordion.hasClass('cpp-accordion-content')) {
@@ -24,36 +27,31 @@ jQuery(document).ready(function ($) {
     $(document).on('click', '.cpp-upload-btn', function (e) {
         e.preventDefault();
         var button = $(this);
-        // Try finding input by data attribute first, then sibling, then parent structure
         var inputId = button.data("input-id");
         var input_field = inputId ? jQuery("#" + inputId) : button.siblings('input[type="text"]');
-        if (!input_field.length) { // Try finding in parent's sibling if structure is different
+        if (!input_field.length) {
              input_field = button.closest('td').find('input[type="text"]');
         }
 
-        // Find preview container relative to the button/input
-        var preview_img_container = button.closest('td, .cpp-image-uploader-wrapper, .form-table tr').find(".cpp-image-preview"); // Adjusted selector
+        var preview_img_container = button.closest('td, .cpp-image-uploader-wrapper, .form-table tr').find(".cpp-image-preview"); 
 
         if (!input_field.length) {
             console.error("CPP Uploader: Could not find target input field.");
-            return; // Exit if input field not found
+            return;
         }
 
-
-        // Reinitialize the media frame each time to avoid state issues
         mediaUploader = wp.media({
             title: 'انتخاب یا آپلود تصویر',
             button: { text: 'استفاده از این تصویر' },
             multiple: false
         });
 
-        // Use a closure to ensure the correct input_field and preview_img_container are used
         (function(target_input, target_preview) {
-            mediaUploader.off('select'); // Remove previous select handlers
+            mediaUploader.off('select'); 
             mediaUploader.on('select', function () {
                 var attachment = mediaUploader.state().get('selection').first().toJSON();
-                target_input.val(attachment.url).trigger('change'); // Trigger change for potential listeners
-                 if(target_preview.length) { // Check if preview container exists
+                target_input.val(attachment.url).trigger('change');
+                 if(target_preview.length) {
                     target_preview.html('<img src="' + attachment.url + '" style="max-width: 100px; height: auto; margin-top: 10px; border: 1px solid #ddd; padding: 3px;">');
                  }
             });
@@ -66,33 +64,26 @@ jQuery(document).ready(function ($) {
     // ویرایش سریع با دبل کلیک
     $(document).on('dblclick', '.cpp-quick-edit, .cpp-quick-edit-select', function () {
         var cell = $(this);
-        // Check if the cell itself or its parent TD is already being edited
         if (cell.hasClass('editing') || cell.closest('td').hasClass('editing-td')) return;
 
         var id = cell.data('id'), field = cell.data('field'), table_type = cell.data('table-type');
-        var original_html = cell.html(); // Store original HTML of the span/cell
-
-        // For simple text, get text. For complex HTML (like price range spans), store original.
+        var original_html = cell.html(); 
         var original_text_content = cell.clone().children().remove().end().text().trim();
 
-
         var input_element;
-        var target_element = cell; // By default, replace the cell itself
+        var target_element = cell;
 
         if (cell.hasClass('cpp-quick-edit-select')) {
              cell.data('original-content', original_html).addClass('editing');
             var current_value = cell.data('current');
             input_element = $('<select>').addClass('cpp-quick-edit-input');
-             // Use localized vars for status options
              var options_list = {};
              if (table_type === 'orders') {
                  options_list = cpp_admin_vars.order_statuses || {};
              } else if (table_type === 'products' && field === 'is_active') {
                   options_list = cpp_admin_vars.product_statuses || {};
              } else if (table_type === 'products' && field === 'cat_id') {
-                  // TODO: Load categories via AJAX or localize them if needed for quick edit
                    console.warn("Category quick edit not fully implemented yet.");
-                   // For now, just show current text
                     input_element = $('<input type="text">').addClass('cpp-quick-edit-input').val(original_text_content);
 
              }
@@ -101,42 +92,46 @@ jQuery(document).ready(function ($) {
                 $('<option>').val(val).text(text).prop('selected', val == current_value).appendTo(input_element);
             });
         } else if (field === 'min_price' || field === 'max_price') {
-             // Handle combined price range editing - target the parent TD
              var td = cell.closest('td');
-             if (td.hasClass('editing-td')) return; // Already editing this cell group
-             td.addClass('editing-td'); // Add editing class to parent TD
-             target_element = td; // Replace the entire TD content
+             if (td.hasClass('editing-td')) return;
+             td.addClass('editing-td');
+             target_element = td;
 
              var min_span = td.find('[data-field="min_price"]');
              var max_span = td.find('[data-field="max_price"]');
-             td.data('original-content', td.html()); // Store original TD HTML
+             td.data('original-content', td.html());
 
              var min_val = min_span.text().trim();
              var max_val = max_span.text().trim();
 
              var container = $('<div>');
-             var min_input = $('<input type="text">').addClass('cpp-quick-edit-input small-text').val(min_val).data('field', 'min_price');
-             var max_input = $('<input type="text">').addClass('cpp-quick-edit-input small-text').val(max_val).data('field', 'max_price');
+             
+             // --- اصلاح: استفاده از attr به جای data برای شناسایی توسط سلکتور در تابع ذخیره ---
+             var min_input = $('<input type="text">').addClass('cpp-quick-edit-input small-text').val(min_val).attr('data-field', 'min_price');
+             var max_input = $('<input type="text">').addClass('cpp-quick-edit-input small-text').val(max_val).attr('data-field', 'max_price');
+             
              container.append(min_input).append(' - ').append(max_input);
-             input_element = container; // Use the container as the main element
+             input_element = container;
 
-             td.css('width', 'auto'); // Let it expand
+             td.css('width', 'auto'); 
 
 
         } else {
-             cell.data('original-content', original_html).addClass('editing');
-            var input_type = (field === 'admin_note' || field === 'description') ? 'textarea' : 'text';
-            input_element = $(`<${input_type}>`).addClass('cpp-quick-edit-input').val(original_text_content);
+            cell.data('original-content', original_html).addClass('editing');
+            
+            // --- اصلاح: ایجاد صحیح المنت input یا textarea ---
+            if (field === 'admin_note' || field === 'description') {
+                input_element = $('<textarea>').addClass('cpp-quick-edit-input').val(original_text_content);
+            } else {
+                input_element = $('<input>').attr('type', 'text').addClass('cpp-quick-edit-input').val(original_text_content);
+            }
         }
 
         var save_btn = $('<button>').addClass('button button-primary button-small').text(cpp_admin_vars.i18n.save || 'ذخیره');
         var cancel_btn = $('<button>').addClass('button button-secondary button-small').text(cpp_admin_vars.i18n.cancel || 'لغو').css('margin-right', '5px');
         var buttons = $('<div>').addClass('cpp-quick-edit-buttons').css('margin-top', '5px').append(save_btn).append(cancel_btn);
 
-        // Clear the target element and append the input/buttons
         target_element.html('').append(input_element).append(buttons);
-
-        // Focus the first input element if it exists
         input_element.find('input, select, textarea').first().focus();
 
         save_btn.on('click', function () {
@@ -153,26 +148,26 @@ jQuery(document).ready(function ($) {
                  cell.removeClass('editing').html(cell.data('original-content'));
              }
          });
-        // Keydown events for inputs within the cell/td
          $(input_element).find('input, select, textarea').on('keydown', function (e) {
             if (e.key === 'Escape') {
                 cancel_btn.click();
-            } else if (e.key === 'Enter' && !$(this).is('textarea')) { // Enter saves only for non-textarea
+            } else if (e.key === 'Enter' && !$(this).is('textarea')) {
                  e.preventDefault();
                  save_btn.click();
              }
         });
     });
 
-    // Separate save function for combined price range
     function performSavePriceRange(td, id, table_type) {
+        // --- چون از attr استفاده کردیم، حالا این سلکتور درست کار می‌کند ---
         var min_input = td.find('input[data-field="min_price"]');
         var max_input = td.find('input[data-field="max_price"]');
+        
         var min_value = min_input.val();
         var max_value = max_input.val();
         var original_html = td.data('original-content');
 
-        td.html(cpp_admin_vars.i18n.saving || 'در حال ذخیره...'); // Show saving message
+        td.html(cpp_admin_vars.i18n.saving || 'در حال ذخیره...');
 
         var promise1 = $.post(cpp_admin_vars.ajax_url, {
             action: 'cpp_quick_update', security: cpp_admin_vars.nonce, id: id, field: 'min_price', value: min_value, table_type: table_type
@@ -202,15 +197,15 @@ jQuery(document).ready(function ($) {
                  alert(errorMsg);
                  td.html(original_html);
             }
-        }).fail(function () {
+        }).fail(function (jqXHR, textStatus, errorThrown) {
              td.removeClass('editing-td');
              alert(cpp_admin_vars.i18n.serverError || 'خطای سرور');
+             console.error("Price Range Save Error:", textStatus, errorThrown, jqXHR);
              td.html(original_html);
         });
     }
 
 
-    // Original save function for single fields
     function performSave(cell, id, field, table_type) {
         var inputField = cell.find('.cpp-quick-edit-input');
         var new_value = inputField.val();
@@ -227,17 +222,16 @@ jQuery(document).ready(function ($) {
                      var options_list = {};
                      if (table_type === 'orders') options_list = cpp_admin_vars.order_statuses || {};
                      else if (table_type === 'products' && field === 'is_active') options_list = cpp_admin_vars.product_statuses || {};
-                     // else if (table_type === 'products' && field === 'cat_id') options_list = /* localized categories */;
 
                      display_html_or_text = options_list[new_value] || new_value;
                      cell.data('current', new_value);
-                     cell.html(display_html_or_text); // Update text
+                     cell.html(display_html_or_text); 
                 } else {
                      display_html_or_text = new_value.replace(/\n/g, '<br>');
-                     cell.html(display_html_or_text); // Update HTML content
+                     cell.html(display_html_or_text); 
                 }
 
-                if (response.data && response.data.new_time) { // Check if new_time exists
+                if (response.data && response.data.new_time) { 
                     cell.closest('tr').find('.cpp-last-update').text(response.data.new_time);
                 }
             } else {
@@ -297,7 +291,6 @@ jQuery(document).ready(function ($) {
             });
     }
 
-    // Close modal logic
     $(document).on('click', '#cpp-edit-modal .cpp-close-modal', function () { $('#cpp-edit-modal').hide(); });
     $(document).on('click', '#cpp-edit-modal', function(e) { if ($(e.target).is('#cpp-edit-modal')) $(this).hide(); });
 
@@ -337,11 +330,10 @@ jQuery(document).ready(function ($) {
         });
     });
 
-     // Close chart modal logic
     $(document).on('click', '#cpp-chart-modal .cpp-close-modal', function () { $('#cpp-chart-modal').hide(); if (chartInstance) { chartInstance.destroy(); chartInstance = null; } });
     $(document).on('click', '#cpp-chart-modal', function(e) { if ($(e.target).is('#cpp-chart-modal')) { $(this).hide(); if (chartInstance) { chartInstance.destroy(); chartInstance = null; } } });
 
-    function renderChart(chartData, ctx) { /* ... (renderChart function remains the same as previous correct version) ... */
+    function renderChart(chartData, ctx) { 
          var datasets = [];
          if (chartData.prices && chartData.prices.filter(p => p !== null).length > 0) {
              datasets.push({ label: 'قیمت پایه', data: chartData.prices, borderColor: 'rgb(75, 192, 192)', backgroundColor: 'rgba(75, 192, 192, 0.2)', tension: 0.3, fill: false, borderWidth: 2 });
@@ -476,7 +468,6 @@ jQuery(document).ready(function ($) {
              logBox.val(readableError);
              logBox.css('color', 'red'); button.prop('disabled', false).text(originalButtonText); console.error("AJAX Error SMS test full:", jqXHR);
         });
-    }); // End SMS Test Button Click Handler
+    });
 
-
-}); // End jQuery ready
+});
