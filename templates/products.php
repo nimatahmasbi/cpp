@@ -3,7 +3,7 @@ if (!defined('ABSPATH')) exit;
 global $wpdb;
 
 $categories = CPP_Core::get_all_categories(); 
-// تغییر ORDER BY به ASC
+// تغییر به ASC
 $products = $wpdb->get_results("SELECT p.*, c.name as category_name FROM " . CPP_DB_PRODUCTS . " p LEFT JOIN " . CPP_DB_CATEGORIES . " c ON p.cat_id = c.id ORDER BY p.id ASC");
 $status_options = [ '1' => __('فعال', 'cpp-full'), '0' => __('غیرفعال', 'cpp-full'), ];
 $default_image_url = CPP_ASSETS_URL . 'images/default-product.png';
