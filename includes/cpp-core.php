@@ -13,28 +13,16 @@ class CPP_Core {
         }
     }
 
-    /**
-     * بررسی دسترسی کاربر (پشتیبانی از چند نقش)
-     */
     public static function has_access() {
         $allowed_roles = get_option('cpp_admin_capability');
-
-        // سازگاری با تنظیمات قدیمی
-        if (empty($allowed_roles)) {
-            $allowed_roles = ['administrator'];
-        } elseif (is_string($allowed_roles)) {
-            $allowed_roles = ['administrator']; 
-        }
+        if (empty($allowed_roles)) $allowed_roles = ['administrator'];
+        elseif (is_string($allowed_roles)) $allowed_roles = ['administrator']; 
 
         $current_user = wp_get_current_user();
-        if (empty($current_user) || empty($current_user->roles)) {
-            return false;
-        }
+        if (empty($current_user) || empty($current_user->roles)) return false;
 
         foreach ($current_user->roles as $user_role) {
-            if (in_array($user_role, $allowed_roles)) {
-                return true;
-            }
+            if (in_array($user_role, $allowed_roles)) return true;
         }
         return false;
     }
@@ -54,7 +42,6 @@ class CPP_Core {
         dbDelta($sql3);
         dbDelta($sql4);
 
-        // آپدیت ساختار جداول قدیمی
         $table_name_history = CPP_DB_PRICE_HISTORY;
         if($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_name_history)) == $table_name_history) {
             $history_columns = $wpdb->get_col("DESC `{$table_name_history}`");
@@ -69,7 +56,6 @@ class CPP_Core {
          }
     }
 
-    // اصلاح تابع ذخیره: ثبت کامل (Snapshot) برای جلوگیری از قطع شدن نمودار
     public static function save_price_history($product_id, $new_value, $field_name = 'price') {
          global $wpdb;
          $product_id = intval($product_id);
@@ -78,7 +64,6 @@ class CPP_Core {
          $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
          if (!$current_product) return false;
 
-         // اگر فیلدی تغییر نکرده، مقدار قبلی‌اش را نگه دار
          $price_to_save = ($field_name === 'price') ? $new_value : $current_product->price;
          $min_to_save   = ($field_name === 'min_price') ? $new_value : $current_product->min_price;
          $max_to_save   = ($field_name === 'max_price') ? $new_value : $current_product->max_price;
@@ -100,7 +85,6 @@ class CPP_Core {
           return false;
      }
 
-    // تابع مهم: تبدیل اعداد فارسی و حذف کاما برای نمودار
     private static function clean_price_value($value) {
         if ($value === null || $value === '') return null;
         $persian = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
@@ -108,7 +92,7 @@ class CPP_Core {
         $english = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
         $value = str_replace($persian, $english, $value);
         $value = str_replace($arabic, $english, $value);
-        $value = preg_replace('/[^0-9.]/', '', $value); // فقط اعداد و ممیز
+        $value = preg_replace('/[^0-9.]/', '', $value);
         return ($value === '') ? null : (float)$value;
     }
 
@@ -117,6 +101,7 @@ class CPP_Core {
 
         $product_id = intval($product_id);
         $months = intval($months);
+        $disable_base_price = get_option('cpp_disable_base_price', 0);
         
         $labels = []; $prices = []; $min_prices = []; $max_prices = [];
 
@@ -129,29 +114,46 @@ class CPP_Core {
             ORDER BY change_time ASC
         ", $product_id, $date_limit));
 
-        $disable_base_price = get_option('cpp_disable_base_price', 0);
+        // اضافه کردن وضعیت فعلی اگر تاریخچه ناقص است
+        $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
+        if ($current_product) {
+            $last_history_time = !empty($history) ? end($history)->change_time : '';
+            if (empty($history) || ($current_product->last_updated_at > $last_history_time)) {
+                $dummy = new stdClass();
+                $dummy->change_time = $current_product->last_updated_at ? $current_product->last_updated_at : current_time('mysql', 1);
+                $dummy->price = $current_product->price;
+                $dummy->min_price = $current_product->min_price;
+                $dummy->max_price = $current_product->max_price;
+                $history[] = $dummy;
+            }
+        }
 
         foreach ($history as $row) {
             $ts = strtotime(get_date_from_gmt($row->change_time));
             if (!$ts) $ts = current_time('timestamp');
             $labels[] = date_i18n('Y/m/d H:i', $ts);
 
-            $prices[] = (!$disable_base_price) ? self::clean_price_value($row->price) : null;
-            $min_prices[] = self::clean_price_value($row->min_price);
-            $max_prices[] = self::clean_price_value($row->max_price);
-        }
+            $p_base = self::clean_price_value($row->price);
+            $p_min  = self::clean_price_value($row->min_price);
+            $p_max  = self::clean_price_value($row->max_price);
 
-        // اضافه کردن وضعیت فعلی به عنوان آخرین نقطه (برای پیوستگی خطوط)
-        $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
-        if ($current_product) {
-            $last_history_time = !empty($history) ? end($history)->change_time : '';
-            // اگر تاریخچه خالی است یا آپدیت جدیدتری داریم
-            if (empty($history) || ($current_product->last_updated_at > $last_history_time)) {
-                $labels[] = date_i18n('Y/m/d H:i', current_time('timestamp'));
-                $prices[] = (!$disable_base_price) ? self::clean_price_value($current_product->price) : null;
-                $min_prices[] = self::clean_price_value($current_product->min_price);
-                $max_prices[] = self::clean_price_value($current_product->max_price);
+            // منطق جدید: اگر قیمت پایه غیرفعال است، میانگین حداقل و حداکثر را محاسبه کن
+            if ($disable_base_price) {
+                if ($p_min !== null && $p_max !== null) {
+                    $prices[] = ($p_min + $p_max) / 2;
+                } elseif ($p_min !== null) {
+                    $prices[] = $p_min;
+                } elseif ($p_max !== null) {
+                    $prices[] = $p_max;
+                } else {
+                    $prices[] = null;
+                }
+            } else {
+                $prices[] = $p_base;
             }
+
+            $min_prices[] = $p_min;
+            $max_prices[] = $p_max;
         }
 
         return [ 'labels' => $labels, 'prices' => $prices, 'min_prices' => $min_prices, 'max_prices' => $max_prices ];
@@ -201,7 +203,6 @@ function cpp_ajax_get_chart_data() {
     
     $data = CPP_Core::get_chart_data($product_id);
     
-    // بررسی وجود حداقل یک داده معتبر
     $has_any_data = false;
     foreach(['prices', 'min_prices', 'max_prices'] as $key) {
         if (!empty($data[$key])) {
