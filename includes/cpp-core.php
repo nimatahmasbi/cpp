@@ -101,7 +101,6 @@ class CPP_Core {
 
         $product_id = intval($product_id);
         $months = intval($months);
-        $disable_base_price = get_option('cpp_disable_base_price', 0);
         
         $labels = []; $prices = []; $min_prices = []; $max_prices = [];
 
@@ -114,11 +113,9 @@ class CPP_Core {
             ORDER BY change_time ASC
         ", $product_id, $date_limit));
 
-        // اضافه کردن وضعیت فعلی اگر تاریخچه ناقص است
-        $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
-        if ($current_product) {
-            $last_history_time = !empty($history) ? end($history)->change_time : '';
-            if (empty($history) || ($current_product->last_updated_at > $last_history_time)) {
+        if (empty($history)) {
+            $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
+            if ($current_product) {
                 $dummy = new stdClass();
                 $dummy->change_time = $current_product->last_updated_at ? $current_product->last_updated_at : current_time('mysql', 1);
                 $dummy->price = $current_product->price;
@@ -127,6 +124,8 @@ class CPP_Core {
                 $history[] = $dummy;
             }
         }
+
+        $disable_base_price = get_option('cpp_disable_base_price', 0);
 
         foreach ($history as $row) {
             $ts = strtotime(get_date_from_gmt($row->change_time));
@@ -137,7 +136,6 @@ class CPP_Core {
             $p_min  = self::clean_price_value($row->min_price);
             $p_max  = self::clean_price_value($row->max_price);
 
-            // منطق جدید: اگر قیمت پایه غیرفعال است، میانگین حداقل و حداکثر را محاسبه کن
             if ($disable_base_price) {
                 if ($p_min !== null && $p_max !== null) {
                     $prices[] = ($p_min + $p_max) / 2;
@@ -159,22 +157,23 @@ class CPP_Core {
         return [ 'labels' => $labels, 'prices' => $prices, 'min_prices' => $min_prices, 'max_prices' => $max_prices ];
     }
     
+    // اصلاح ترتیب: بر اساس ID صعودی
     public static function get_all_categories() {
         global $wpdb;
         if($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", CPP_DB_CATEGORIES)) != CPP_DB_CATEGORIES) return [];
-        return $wpdb->get_results("SELECT id, name, slug, image_url, created FROM " . CPP_DB_CATEGORIES . " ORDER BY name ASC");
+        return $wpdb->get_results("SELECT id, name, slug, image_url, created FROM " . CPP_DB_CATEGORIES . " ORDER BY id ASC");
     }
     
+    // اصلاح ترتیب: بر اساس ID صعودی
     public static function get_all_orders() {
         global $wpdb;
         if($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", CPP_DB_ORDERS)) != CPP_DB_ORDERS) return [];
-        return $wpdb->get_results("SELECT * FROM " . CPP_DB_ORDERS . " ORDER BY created DESC");
+        return $wpdb->get_results("SELECT * FROM " . CPP_DB_ORDERS . " ORDER BY id ASC");
     }
 } 
 
 add_action('init', ['CPP_Core', 'init_session'], 1);
 
-// AJAX Handlers
 add_action('wp_ajax_cpp_get_captcha', 'cpp_ajax_get_captcha');
 add_action('wp_ajax_nopriv_cpp_get_captcha', 'cpp_ajax_get_captcha');
 function cpp_ajax_get_captcha() {
