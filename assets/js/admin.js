@@ -195,7 +195,7 @@ jQuery(document).ready(function ($) {
         openEditModal(data);
     });
 
-    // 5. رسم نمودار
+    // 5. رسم نمودار (اصلاح ترتیب دیتاست‌ها برای هاشور صحیح)
     var chartInstance = null;
     $(document).on('click', '.cpp-show-chart', function (e) {
         e.preventDefault();
@@ -212,7 +212,7 @@ jQuery(document).ready(function ($) {
                 'background-image': 'url(' + cpp_admin_vars.logo_url + ')',
                 'background-repeat': 'no-repeat',
                 'background-position': 'center center',
-                'background-size': '150px', 
+                'background-size': '200px', 
                 'opacity': '0.1' 
             });
         }
@@ -223,27 +223,47 @@ jQuery(document).ready(function ($) {
         $.get(cpp_admin_vars.ajax_url, { action: 'cpp_get_chart_data', product_id: pid, security: cpp_admin_vars.nonce }).done(function (res) {
             if (res.success && res.data.labels) {
                  var ds = [];
+                 
+                 // نکته کلیدی: ترتیب افزودن دیتاست‌ها برای پر شدن صحیح رنگ‌ها
+                 // لایه ۰: حداقل قیمت
                  if (res.data.min_prices) {
                      ds.push({ 
-                         label: 'حداقل', data: res.data.min_prices, 
-                         borderColor: 'rgba(54, 162, 235, 0.8)', // آبی
-                         borderDash: [5,5], pointRadius: 0, fill: false 
+                         label: 'حداقل', 
+                         data: res.data.min_prices, 
+                         borderColor: 'rgba(54, 162, 235, 0.8)', // آبی پررنگ
+                         borderDash: [5,5], 
+                         pointRadius: 0,
+                         fill: false 
                      });
                  }
+
+                 // لایه ۱: قیمت پایه (فاصله تا لایه ۰ را آبی کن)
                  if (res.data.prices) {
                      ds.push({ 
-                         label: 'قیمت پایه', data: res.data.prices, 
-                         borderColor: 'rgb(75, 192, 192)', tension: 0.1, 
-                         fill: { target: '-1', above: 'rgba(255, 255, 255, 0)', below: 'rgba(54, 162, 235, 0.2)' }, // فاصله تا حداقل: آبی کمرنگ
-                         borderWidth: 3 
+                         label: 'قیمت پایه', 
+                         data: res.data.prices, 
+                         borderColor: 'rgb(75, 192, 192)', // سبزآبی
+                         tension: 0.1, 
+                         borderWidth: 3,
+                         fill: {
+                             target: 0, // اشاره به ایندکس ۰ (حداقل قیمت)
+                             above: 'rgba(54, 162, 235, 0.2)' // آبی کمرنگ
+                         }
                      });
                  }
+
+                 // لایه ۲: حداکثر قیمت (فاصله تا لایه ۱ را قرمز کن)
                  if (res.data.max_prices) {
                      ds.push({ 
-                         label: 'حداکثر', data: res.data.max_prices, 
-                         borderColor: 'rgba(255, 99, 132, 0.8)', // قرمز
-                         borderDash: [5,5], pointRadius: 0, 
-                         fill: { target: '-1', above: 'rgba(255, 99, 132, 0.2)', below: 'rgba(255, 255, 255, 0)' } // فاصله تا پایه: قرمز کمرنگ
+                         label: 'حداکثر', 
+                         data: res.data.max_prices, 
+                         borderColor: 'rgba(255, 99, 132, 0.8)', // قرمز پررنگ
+                         borderDash: [5,5], 
+                         pointRadius: 0,
+                         fill: {
+                             target: 1, // اشاره به ایندکس ۱ (قیمت پایه)
+                             above: 'rgba(255, 99, 132, 0.2)' // قرمز کمرنگ
+                         }
                      });
                  }
                  
@@ -252,8 +272,15 @@ jQuery(document).ready(function ($) {
                      data: { labels: res.data.labels, datasets: ds }, 
                      options: { 
                          responsive: true, 
+                         maintainAspectRatio: false,
                          spanGaps: true,
-                         plugins: { filler: { propagate: false } },
+                         plugins: {
+                             filler: { propagate: false } // جلوگیری از تداخل رنگ‌ها
+                         },
+                         interaction: {
+                             mode: 'index',
+                             intersect: false,
+                         },
                          scales: { y: { beginAtZero: false } }
                      } 
                  });
@@ -261,7 +288,7 @@ jQuery(document).ready(function ($) {
         }).fail(function () { alert('خطای دریافت داده'); modal.hide(); });
     });
 
-    // 6. ارسال فرم‌های ویرایش (داخل مدال)
+    // 6. ارسال فرم‌های ویرایش
     $(document).on('submit', '#cpp-edit-product-form, #cpp-edit-category-form', function (e) {
         e.preventDefault();
         var form = $(this);
