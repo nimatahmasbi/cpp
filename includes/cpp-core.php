@@ -42,6 +42,7 @@ class CPP_Core {
         dbDelta($sql3);
         dbDelta($sql4);
 
+        // آپدیت ساختار جداول
         $table_name_history = CPP_DB_PRICE_HISTORY;
         if($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_name_history)) == $table_name_history) {
             $history_columns = $wpdb->get_col("DESC `{$table_name_history}`");
@@ -56,32 +57,26 @@ class CPP_Core {
          }
     }
 
-    /**
-     * ثبت تاریخچه قیمت (اصلاح شده: ثبت کامل همه قیمت‌ها در هر تغییر)
-     */
+    // ثبت تاریخچه کامل (هر سه قیمت)
     public static function save_price_history($product_id, $new_value, $field_name = 'price') {
          global $wpdb;
          $product_id = intval($product_id);
          if (!$product_id) return false;
          
-         // 1. دریافت مقادیر فعلی محصول از دیتابیس (برای پر کردن جاهای خالی)
+         // گرفتن مقادیر فعلی برای پر کردن جاهای خالی
          $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
-         
          if (!$current_product) return false;
 
-         // 2. آماده‌سازی داده‌ها برای ثبت
-         // اگر فیلدی در حال تغییر است، از مقدار جدید ($new_value) استفاده کن
-         // اگر نه، از مقدار فعلی دیتابیس استفاده کن تا تاریخچه ناقص نشود
          $price_to_save = ($field_name === 'price') ? $new_value : $current_product->price;
          $min_to_save   = ($field_name === 'min_price') ? $new_value : $current_product->min_price;
          $max_to_save   = ($field_name === 'max_price') ? $new_value : $current_product->max_price;
 
          $data_to_insert = [
-             'product_id'  => $product_id,
+             'product_id' => $product_id,
              'change_time' => current_time('mysql', 1), 
-             'price'       => sanitize_text_field($price_to_save), 
-             'min_price'   => sanitize_text_field($min_to_save), 
-             'max_price'   => sanitize_text_field($max_to_save),
+             'price' => sanitize_text_field($price_to_save), 
+             'min_price' => sanitize_text_field($min_to_save), 
+             'max_price' => sanitize_text_field($max_to_save),
          ];
          
          $inserted = $wpdb->insert(CPP_DB_PRICE_HISTORY, $data_to_insert);
@@ -93,6 +88,7 @@ class CPP_Core {
           return false;
      }
 
+    // تمیزکردن اعداد (فارسی به انگلیسی و حذف کاما)
     private static function clean_price_value($value) {
         if ($value === null || $value === '') return null;
         $persian = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
@@ -100,7 +96,7 @@ class CPP_Core {
         $english = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
         $value = str_replace($persian, $english, $value);
         $value = str_replace($arabic, $english, $value);
-        $value = preg_replace('/[^0-9.]/', '', $value); // فقط اعداد و نقطه باقی بمانند
+        $value = preg_replace('/[^0-9.]/', '', $value);
         return ($value === '') ? null : (float)$value;
     }
 
@@ -117,6 +113,7 @@ class CPP_Core {
 
         $date_limit = date('Y-m-d H:i:s', strtotime("-{$months} months", current_time('timestamp', 1)));
 
+         // 1. دریافت تاریخچه
          $history = $wpdb->get_results($wpdb->prepare("
             SELECT price, min_price, max_price, change_time
             FROM " . CPP_DB_PRICE_HISTORY . "
@@ -124,14 +121,24 @@ class CPP_Core {
             ORDER BY change_time ASC
         ", $product_id, $date_limit));
 
-        if (empty($history)) {
-            $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
-            if ($current_product) {
+        // 2. دریافت وضعیت فعلی محصول
+        $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
+
+        // 3. ترکیب تاریخچه با وضعیت فعلی
+        // اگر تاریخچه خالی بود یا آخرین رکورد تاریخچه با وضعیت فعلی فرق داشت، وضعیت فعلی را اضافه کن
+        // این کار باعث می‌شود حتی اگر تاریخچه‌ای نباشد، نمودار یک نقطه (الان) را نشان دهد.
+        $last_history_time = !empty($history) ? end($history)->change_time : '';
+        
+        if ($current_product) {
+            // اگر زمان آپدیت محصول جدیدتر از آخرین تاریخچه است یا تاریخچه خالی است
+            if (empty($history) || ($current_product->last_updated_at > $last_history_time)) {
                 $dummy = new stdClass();
                 $dummy->change_time = $current_product->last_updated_at ? $current_product->last_updated_at : current_time('mysql', 1);
                 $dummy->price = $current_product->price;
                 $dummy->min_price = $current_product->min_price;
                 $dummy->max_price = $current_product->max_price;
+                
+                // اضافه کردن به انتهای آرایه
                 $history[] = $dummy;
             }
         }
@@ -205,10 +212,13 @@ function cpp_ajax_get_chart_data() {
     
     $data = CPP_Core::get_chart_data($product_id);
     
+    // بررسی نهایی: آیا حداقل یک داده عددی وجود دارد؟
     $has_any_data = false;
     foreach(['prices', 'min_prices', 'max_prices'] as $key) {
-        if (!empty($data[$key]) && count(array_filter($data[$key], function($v){ return $v !== null; })) > 0) {
-            $has_any_data = true; break;
+        if (!empty($data[$key])) {
+            foreach($data[$key] as $val) {
+                if ($val !== null) { $has_any_data = true; break 2; }
+            }
         }
     }
 
@@ -275,8 +285,6 @@ function cpp_submit_order() {
          wp_send_json_error(['message' => __('خطا در ثبت سفارش.', 'cpp-full')], 500);
          wp_die();
     }
-
-    $order_id = $wpdb->insert_id;
 
     $admin_placeholders = [
         '{product_name}'  => $product->name,
