@@ -3,9 +3,6 @@ if (!defined('ABSPATH')) exit;
 
 class CPP_Core {
 
-    /**
-     * شروع نشست (Session) برای کپچا
-     */
     public static function init_session() {
         if (!session_id() && !headers_sent()) {
             try {
@@ -16,39 +13,20 @@ class CPP_Core {
         }
     }
 
-    /**
-     * بررسی سطح دسترسی کاربر (پشتیبانی از چند نقش کاربری)
-     * این تابع بررسی می‌کند که آیا کاربر فعلی یکی از نقش‌های انتخاب شده در تنظیمات را دارد یا خیر.
-     */
     public static function has_access() {
-        // دریافت نقش‌های مجاز از تنظیمات
         $allowed_roles = get_option('cpp_admin_capability');
-
-        // مدیریت سازگاری با نسخه‌های قدیمی (اگر تنظیمات رشته بود یا خالی بود)
-        if (empty($allowed_roles)) {
-            $allowed_roles = ['administrator'];
-        } elseif (is_string($allowed_roles)) {
-            $allowed_roles = ['administrator']; 
-        }
+        if (empty($allowed_roles)) $allowed_roles = ['administrator'];
+        elseif (is_string($allowed_roles)) $allowed_roles = ['administrator']; 
 
         $current_user = wp_get_current_user();
-        if (empty($current_user) || empty($current_user->roles)) {
-            return false;
-        }
+        if (empty($current_user) || empty($current_user->roles)) return false;
 
-        // بررسی تداخل نقش‌های کاربر با نقش‌های مجاز
         foreach ($current_user->roles as $user_role) {
-            if (in_array($user_role, $allowed_roles)) {
-                return true;
-            }
+            if (in_array($user_role, $allowed_roles)) return true;
         }
-
         return false;
     }
 
-    /**
-     * ایجاد جداول دیتابیس
-     */
     public static function create_db_tables() {
         global $wpdb;
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
@@ -64,7 +42,6 @@ class CPP_Core {
         dbDelta($sql3);
         dbDelta($sql4);
 
-        // آپدیت ساختار جداول قدیمی در صورت نیاز
         $table_name_history = CPP_DB_PRICE_HISTORY;
         if($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_name_history)) == $table_name_history) {
             $history_columns = $wpdb->get_col("DESC `{$table_name_history}`");
@@ -79,15 +56,10 @@ class CPP_Core {
          }
     }
 
-    /**
-     * ثبت تاریخچه قیمت
-     */
     public static function save_price_history($product_id, $new_value, $field_name = 'price') {
          global $wpdb;
          $product_id = intval($product_id);
-         if (!$product_id || !in_array($field_name, ['price', 'min_price', 'max_price'])) {
-             return false;
-         }
+         if (!$product_id) return false;
          
          $data_to_insert = [
              'product_id' => $product_id,
@@ -105,79 +77,86 @@ class CPP_Core {
           return false;
      }
 
-    /**
-     * دریافت داده‌های نمودار
-     * اصلاح شده: نمایش قیمت فعلی در صورت نبودن تاریخچه
-     */
+    // --- تابع دریافت داده‌های نمودار (اصلاح شده) ---
     public static function get_chart_data($product_id, $months = 6) {
         global $wpdb;
 
         $product_id = intval($product_id);
         $months = intval($months);
-        if ($product_id <= 0 || $months <= 0) {
-            return ['labels' => [], 'prices' => [], 'min_prices' => [], 'max_prices' => []];
-        }
-
-        $disable_base_price = get_option('cpp_disable_base_price', 0);
+        
         $labels = [];
         $prices = [];
         $min_prices = [];
         $max_prices = [];
 
+        // 1. دریافت تاریخچه
         $date_limit = date('Y-m-d H:i:s', strtotime("-{$months} months", current_time('timestamp', 1)));
-
-         $history = $wpdb->get_results($wpdb->prepare("
+        $history = $wpdb->get_results($wpdb->prepare("
             SELECT price, min_price, max_price, change_time
             FROM " . CPP_DB_PRICE_HISTORY . "
             WHERE product_id = %d AND change_time >= %s
             ORDER BY change_time ASC
         ", $product_id, $date_limit));
 
-        // --- اصلاح: اگر تاریخچه خالی بود، قیمت فعلی محصول را به عنوان نقطه شروع اضافه کن ---
-        if (empty($history)) {
-            $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
-            
-            if ($current_product) {
-                $dummy_row = new stdClass();
-                $dummy_row->change_time = $current_product->last_updated_at;
-                
-                // اطمینان از معتبر بودن زمان
-                if (empty($dummy_row->change_time) || substr($dummy_row->change_time, 0, 4) == '0000') {
-                    $dummy_row->change_time = current_time('mysql', 1);
-                }
+        // 2. دریافت اطلاعات فعلی محصول
+        $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
 
-                $dummy_row->price = ($current_product->price !== '') ? $current_product->price : null;
-                $dummy_row->min_price = ($current_product->min_price !== '') ? $current_product->min_price : null;
-                $dummy_row->max_price = ($current_product->max_price !== '') ? $current_product->max_price : null;
-                
-                // اگر حداقل یکی از قیمت‌ها مقدار داشت، آن را به عنوان داده نمودار در نظر بگیر
-                if ($dummy_row->price !== null || $dummy_row->min_price !== null || $dummy_row->max_price !== null) {
-                    $history[] = $dummy_row;
-                }
+        // 3. اگر تاریخچه خالی بود، یک ردیف ساختگی از اطلاعات فعلی بساز
+        if (empty($history) && $current_product) {
+            $dummy = new stdClass();
+            $dummy->change_time = $current_product->last_updated_at ? $current_product->last_updated_at : current_time('mysql', 1);
+            $dummy->price = $current_product->price;
+            $dummy->min_price = $current_product->min_price;
+            $dummy->max_price = $current_product->max_price;
+            $history[] = $dummy;
+        }
+
+        // 4. پردازش داده‌ها برای نمودار
+        $disable_base_price = get_option('cpp_disable_base_price', 0);
+
+        foreach ($history as $row) {
+            // تبدیل تاریخ
+            $ts = strtotime(get_date_from_gmt($row->change_time));
+            if (!$ts) $ts = current_time('timestamp');
+            $labels[] = date_i18n('Y/m/d H:i', $ts);
+
+            // تبدیل قیمت‌ها به عدد (حذف کاما)
+            $p_base = ($row->price !== null && $row->price !== '') ? (float)str_replace(',', '', $row->price) : null;
+            $p_min  = ($row->min_price !== null && $row->min_price !== '') ? (float)str_replace(',', '', $row->min_price) : null;
+            $p_max  = ($row->max_price !== null && $row->max_price !== '') ? (float)str_replace(',', '', $row->max_price) : null;
+
+            $prices[] = (!$disable_base_price) ? $p_base : null;
+            $min_prices[] = $p_min;
+            $max_prices[] = $p_max;
+        }
+
+        // 5. اگر بعد از پردازش همچنان آرایه‌ها خالی بودند (مثلا همه مقادیر null بودند)
+        // و محصول فعلی قیمت داشت، قیمت فعلی را اضافه کن (Fallback نهایی)
+        $has_data = false;
+        foreach([$prices, $min_prices, $max_prices] as $arr) {
+            if (count(array_filter($arr, function($v) { return $v !== null; })) > 0) {
+                $has_data = true; break;
             }
         }
 
-        if ($history) {
-             $last_price = null;
-             $last_min = null;
-             $last_max = null;
-             
-             foreach ($history as $row) {
-                 $local_timestamp = strtotime(get_date_from_gmt($row->change_time));
-                 if (!$local_timestamp) $local_timestamp = current_time('timestamp'); // Fallback to now
-                 
-                 $labels[] = date_i18n('Y/m/d H:i', $local_timestamp);
-                 
-                 if ($row->price !== null && $row->price !== '') $last_price = (float)str_replace(',', '', $row->price);
-                 if ($row->min_price !== null && $row->min_price !== '') $last_min = (float)str_replace(',', '', $row->min_price);
-                 if ($row->max_price !== null && $row->max_price !== '') $last_max = (float)str_replace(',', '', $row->max_price);
-                 
-                 $prices[] = (!$disable_base_price) ? $last_price : null;
-                 $min_prices[] = $last_min;
-                 $max_prices[] = $last_max;
-             }
-         }
-        return [ 'labels' => $labels, 'prices' => $prices, 'min_prices' => $min_prices, 'max_prices' => $max_prices ];
+        if (!$has_data && $current_product) {
+            $labels[] = date_i18n('Y/m/d H:i', current_time('timestamp'));
+            
+            $cur_base = ($current_product->price !== '') ? (float)str_replace(',', '', $current_product->price) : null;
+            $cur_min = ($current_product->min_price !== '') ? (float)str_replace(',', '', $current_product->min_price) : null;
+            $cur_max = ($current_product->max_price !== '') ? (float)str_replace(',', '', $current_product->max_price) : null;
+
+            $prices[] = (!$disable_base_price) ? $cur_base : null;
+            $min_prices[] = $cur_min;
+            $max_prices[] = $cur_max;
+        }
+
+        return [ 
+            'labels' => $labels, 
+            'prices' => $prices, 
+            'min_prices' => $min_prices, 
+            'max_prices' => $max_prices 
+        ];
     }
     
     public static function get_all_categories() {
@@ -191,15 +170,11 @@ class CPP_Core {
         if($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", CPP_DB_ORDERS)) != CPP_DB_ORDERS) return [];
         return $wpdb->get_results("SELECT * FROM " . CPP_DB_ORDERS . " ORDER BY created DESC");
     }
+} 
 
-} // End Class
-
-// اجرای هوک‌های سراسری
 add_action('init', ['CPP_Core', 'init_session'], 1);
 
-// --- توابع AJAX سمت کاربر (Front-end) ---
-
-// ۱. تولید کپچا
+// AJAX: کپچا
 add_action('wp_ajax_cpp_get_captcha', 'cpp_ajax_get_captcha');
 add_action('wp_ajax_nopriv_cpp_get_captcha', 'cpp_ajax_get_captcha');
 function cpp_ajax_get_captcha() {
@@ -211,17 +186,13 @@ function cpp_ajax_get_captcha() {
     wp_die();
 }
 
-// ۲. دریافت اطلاعات نمودار (با اصلاح بررسی امنیتی برای رفع خطای سرور)
+// AJAX: نمودار
 add_action('wp_ajax_cpp_get_chart_data', 'cpp_ajax_get_chart_data');
 add_action('wp_ajax_nopriv_cpp_get_chart_data', 'cpp_ajax_get_chart_data');
 function cpp_ajax_get_chart_data() {
-    // اصلاح: بررسی هر دو نوع Nonce (هم ادمین برای پیش‌نمایش در پنل، هم فرانت برای سایت)
     $is_valid_nonce = false;
-    if (isset($_REQUEST['security']) && wp_verify_nonce($_REQUEST['security'], 'cpp_admin_nonce')) {
-        $is_valid_nonce = true;
-    } elseif (isset($_REQUEST['nonce']) && wp_verify_nonce($_REQUEST['nonce'], 'cpp_front_nonce')) {
-        $is_valid_nonce = true;
-    }
+    if (isset($_REQUEST['security']) && wp_verify_nonce($_REQUEST['security'], 'cpp_admin_nonce')) $is_valid_nonce = true;
+    elseif (isset($_REQUEST['nonce']) && wp_verify_nonce($_REQUEST['nonce'], 'cpp_front_nonce')) $is_valid_nonce = true;
 
     if (!$is_valid_nonce) {
         wp_send_json_error(['message' => __('مجوز دسترسی نامعتبر است.', 'cpp-full')], 403);
@@ -233,15 +204,23 @@ function cpp_ajax_get_chart_data() {
     
     $data = CPP_Core::get_chart_data($product_id);
     
-    if(empty($data['labels'])) {
-        wp_send_json_error(['message' => __('هیچ داده‌ای برای نمایش وجود ندارد.', 'cpp-full')], 404);
+    // بررسی اینکه آیا واقعاً داده‌ای وجود دارد (حتی یک نقطه)
+    $has_any_data = false;
+    foreach(['prices', 'min_prices', 'max_prices'] as $key) {
+        if (!empty($data[$key]) && count(array_filter($data[$key], function($v){ return $v !== null; })) > 0) {
+            $has_any_data = true; break;
+        }
+    }
+
+    if(!$has_any_data) {
+        wp_send_json_error(['message' => __('هیچ داده قیمتی برای نمایش وجود ندارد.', 'cpp-full')], 404);
     } else {
         wp_send_json_success($data);
     }
     wp_die();
 }
 
-// ۳. ثبت سفارش
+// AJAX: ثبت سفارش
 add_action('wp_ajax_cpp_submit_order', 'cpp_submit_order');
 add_action('wp_ajax_nopriv_cpp_submit_order', 'cpp_submit_order');
 function cpp_submit_order() {
@@ -296,8 +275,6 @@ function cpp_submit_order() {
          wp_send_json_error(['message' => __('خطا در ثبت سفارش.', 'cpp-full')], 500);
          wp_die();
     }
-
-    $order_id = $wpdb->insert_id;
 
     // ارسال اعلان‌ها
     $admin_placeholders = [
