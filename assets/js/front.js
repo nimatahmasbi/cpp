@@ -1,6 +1,8 @@
 jQuery(document).ready(function($) {
     var frontChartInstance = null;
+    var fullFrontChartData = null; // ذخیره داده‌ها برای فیلتر سمت کاربر
 
+    // --- مدیریت کپچا ---
     function refreshCaptcha() {
         var captchaElement = $('.cpp-captcha-code');
         var captchaInput = $('#captcha_input');
@@ -23,7 +25,7 @@ jQuery(document).ready(function($) {
         });
     }
 
-    // باز کردن مودال ثبت سفارش
+    // --- باز کردن مودال ثبت سفارش ---
     $(document).on('click', '.cpp-order-btn', function() {
         var button = $(this); 
         var productId = button.data('product-id');
@@ -40,46 +42,74 @@ jQuery(document).ready(function($) {
         modal.find('.cpp-form-message').remove();
         modal.find('form')[0].reset();
         refreshCaptcha(); 
-        modal.show(); 
+        modal.show(); // یا css('display', 'flex')
     });
 
     $(document).on('click', '.cpp-refresh-captcha', refreshCaptcha);
 
+    // --- ارسال فرم سفارش ---
     $('#cpp-order-form').on('submit', function(e) {
         e.preventDefault();
         var form = $(this);
         var button = form.find('button[type="submit"]');
         var formData = form.serialize(); 
+        var originalButtonText = button.text();
         
-        button.prop('disabled', true).text('ارسال...');
+        button.prop('disabled', true).text(cpp_front_vars.i18n.sending || 'ارسال...');
         form.find('.cpp-form-message').remove();
 
         $.post(cpp_front_vars.ajax_url, formData + '&action=cpp_submit_order&nonce=' + cpp_front_vars.nonce, function(response) {
             if (response.success) {
                 form.before('<div class="cpp-form-message cpp-success">' + response.data.message + '</div>');
-                setTimeout(function() { $('#cpp-order-modal').hide(); button.prop('disabled', false).text('ثبت درخواست'); }, 2000);
+                setTimeout(function() {
+                    $('#cpp-order-modal').hide();
+                    button.prop('disabled', false).text(originalButtonText);
+                }, 2000); 
             } else {
-                form.before('<div class="cpp-form-message cpp-error">' + (response.data.message || 'خطا') + '</div>');
-                button.prop('disabled', false).text('ثبت درخواست');
-                if (response.data.code === 'captcha_error') refreshCaptcha();
+                var msg = response.data.message || 'خطا';
+                form.before('<div class="cpp-form-message cpp-error">' + msg + '</div>');
+                button.prop('disabled', false).text(originalButtonText);
+                if (response.data.code === 'captcha_error') {
+                    refreshCaptcha();
+                }
             }
         }).fail(function() {
-            form.before('<div class="cpp-form-message cpp-error">خطای سرور</div>');
-            button.prop('disabled', false).text('ثبت درخواست');
+            form.before('<div class="cpp-form-message cpp-error">' + cpp_front_vars.i18n.server_error + '</div>');
+            button.prop('disabled', false).text(originalButtonText);
         });
     });
 
-    // باز کردن مودال نمودار (با تنظیمات جدید)
-     $(document).on('click', '.cpp-chart-btn', function() {
+    // --- مدیریت نمودار پیشرفته (سمت کاربر) ---
+     $(document).on('click', '.cpp-chart-btn', function(e) {
+        e.preventDefault();
         var productId = $(this).data('product-id');
         
+        // ساخت HTML مودال با ابزارها اگر وجود ندارد
         if ($('#cpp-front-chart-modal').length === 0) {
-             $('body').append('<div id="cpp-front-chart-modal" class="cpp-modal-overlay" style="display:none;"><div class="cpp-modal-container cpp-chart-container"><button class="cpp-modal-close">&times;</button><h3>نمودار تغییرات قیمت</h3><div class="cpp-chart-inner"><div class="cpp-chart-bg"></div><canvas id="cppFrontPriceChart"></canvas></div></div></div>');
+             var modalHtml = '<div id="cpp-front-chart-modal" class="cpp-modal-overlay" style="display:none;">' +
+                 '<div class="cpp-modal-container cpp-chart-container">' +
+                 '<button class="cpp-modal-close">&times;</button>' +
+                 '<h3>نمودار تغییرات قیمت</h3>' +
+                 // نوار ابزار فیلتر و دانلود
+                 '<div class="cpp-chart-toolbar" style="margin-bottom:10px; text-align:left; direction:ltr;">' +
+                    '<button class="button cpp-chart-filter active" data-range="all">همه</button> ' +
+                    '<button class="button cpp-chart-filter" data-range="12">۱ سال</button> ' +
+                    '<button class="button cpp-chart-filter" data-range="6">۶ ماه</button> ' +
+                    '<button class="button cpp-chart-filter" data-range="3">۳ ماه</button> ' +
+                    '<button class="button cpp-chart-filter" data-range="1">۱ ماه</button> ' +
+                    '<button class="button cpp-chart-filter" data-range="0.25">۱ هفته</button> ' +
+                    '<button class="button button-primary cpp-chart-download" style="margin-left:10px;">دانلود</button>' +
+                '</div>' +
+                 '<div class="cpp-chart-inner"><div class="cpp-chart-bg"></div><canvas id="cppFrontPriceChart"></canvas></div>' +
+                 '</div></div>';
+             $('body').append(modalHtml);
         }
+
         var modal = $('#cpp-front-chart-modal');
         var chartCanvas = modal.find('#cppFrontPriceChart');
         var chartContainer = chartCanvas.parent(); 
 
+        // اعمال لوگو
         if (cpp_front_vars.logo_url) {
             modal.find('.cpp-chart-bg').css({
                 'background-image': 'url(' + cpp_front_vars.logo_url + ')',
@@ -97,12 +127,13 @@ jQuery(document).ready(function($) {
         chartCanvas.show(); 
 
         if (frontChartInstance) { frontChartInstance.destroy(); frontChartInstance = null; }
-        chartContainer.append('<p class="chart-loading" style="text-align:center;">بارگذاری...</p>');
+        chartContainer.append('<p class="chart-loading" style="text-align:center;">' + cpp_front_vars.i18n.loading + '</p>');
 
         $.get(cpp_front_vars.ajax_url, { action: 'cpp_get_chart_data', product_id: productId, nonce: cpp_front_vars.nonce }, function(response) { 
             chartContainer.find('.chart-loading').remove(); 
-            if (response.success && response.data && response.data.labels && response.data.labels.length > 0) {
-                 renderFrontChart(response.data, chartCanvas[0]);
+            if (response.success && response.data && response.data.labels) {
+                 fullFrontChartData = response.data;
+                 renderFrontChart(fullFrontChartData, chartCanvas[0], 'all');
              } else {
                  chartCanvas.hide();
                  chartContainer.prepend('<p class="chart-error" style="color:red; text-align:center;">داده‌ای یافت نشد.</p>');
@@ -114,14 +145,52 @@ jQuery(document).ready(function($) {
         });
     });
 
-    function renderFrontChart(chartData, ctx) {
+    // فیلتر نمودار
+    $(document).on('click', '.cpp-chart-filter', function() {
+        $('.cpp-chart-filter').removeClass('active');
+        $(this).addClass('active');
+        var range = $(this).data('range');
+        var ctx = $('#cppFrontPriceChart')[0];
+        
+        if (frontChartInstance) frontChartInstance.destroy();
+        renderFrontChart(fullFrontChartData, ctx, range);
+    });
+
+    // دانلود نمودار
+    $(document).on('click', '.cpp-chart-download', function() {
+        var link = document.createElement('a');
+        link.href = frontChartInstance.toBase64Image();
+        link.download = 'chart-front.png';
+        link.click();
+    });
+
+    // تابع رسم نمودار
+    function renderFrontChart(data, ctx, range) {
+        var labels = data.labels;
+        var prices = data.prices;
+        var min_prices = data.min_prices;
+        var max_prices = data.max_prices;
+
+        // فیلتر زمانی
+         if (range !== 'all') {
+             var totalPoints = labels.length;
+             var pointsToShow = Math.floor(parseFloat(range) * 30); 
+             if (totalPoints > pointsToShow) {
+                 var start = totalPoints - pointsToShow;
+                 labels = labels.slice(start);
+                 prices = prices.slice(start);
+                 min_prices = min_prices.slice(start);
+                 max_prices = max_prices.slice(start);
+             }
+         }
+
         var datasets = [];
         
-        // ترتیب لایه‌ها: 0=حداقل، 1=پایه، 2=حداکثر
-        if (chartData.min_prices) {
+        // 1. حداقل
+        if (min_prices) {
             datasets.push({ 
                 label: 'حداقل', 
-                data: chartData.min_prices, 
+                data: min_prices, 
                 borderColor: 'rgba(54, 162, 235, 0.8)', 
                 borderDash: [5, 5], 
                 pointRadius: 0, 
@@ -129,84 +198,69 @@ jQuery(document).ready(function($) {
             });
         }
         
-        if (chartData.prices) {
+        // 2. پایه (پر کردن تا حداقل با آبی)
+        if (prices) {
             datasets.push({ 
                 label: 'قیمت پایه', 
-                data: chartData.prices, 
+                data: prices, 
                 borderColor: 'rgb(75, 192, 192)', 
                 tension: 0.1, 
                 borderWidth: 3,
-                fill: { 
-                    target: 0, // پر کردن فاصله تا حداقل (ایندکس 0)
-                    above: 'rgba(54, 162, 235, 0.15)' // آبی کمرنگ
+                fill: {
+                    target: 0, 
+                    above: 'rgba(54, 162, 235, 0.15)' 
                 }
             });
         }
         
-        if (chartData.max_prices) {
+        // 3. حداکثر (پر کردن تا پایه با قرمز)
+        if (max_prices) {
             datasets.push({ 
                 label: 'حداکثر', 
-                data: chartData.max_prices, 
+                data: max_prices, 
                 borderColor: 'rgba(255, 99, 132, 0.8)', 
                 borderDash: [5, 5], 
                 pointRadius: 0, 
-                fill: { 
-                    target: 1, // پر کردن فاصله تا پایه (ایندکس 1)
-                    above: 'rgba(255, 99, 132, 0.15)' // قرمز کمرنگ
+                fill: {
+                    target: 1, 
+                    above: 'rgba(255, 99, 132, 0.15)' 
                 }
             });
         }
 
         if(datasets.length === 0){
-             $(ctx).parent().prepend('<p class="chart-error">داده‌ای نیست.</p>'); $(ctx).hide(); return;
+             $(ctx).parent().prepend('<p class="chart-error">داده‌ای وجود ندارد.</p>');
+             $(ctx).hide(); return;
         }
 
         try {
             frontChartInstance = new Chart(ctx, {
                 type: 'line',
-                data: { labels: chartData.labels, datasets: datasets },
+                data: { labels: labels, datasets: datasets },
                 options: {
-                     responsive: true, maintainAspectRatio: false, spanGaps: true,
-                     plugins: { filler: { propagate: false } },
-                     scales: { y: { beginAtZero: false } }
+                     responsive: true,
+                     maintainAspectRatio: false,
+                     spanGaps: true,
+                     plugins: {
+                          legend: { display: true, position: 'top' },
+                          tooltip: { mode: 'index', intersect: false },
+                          filler: { propagate: false }
+                      },
+                      scales: { y: { beginAtZero: false } }
                 }
              });
-        } catch(e) { console.error(e); }
+        } catch(e) { console.error("Error creating chart:", e); }
     }
 
-    $(document).on('click', '.cpp-modal-close', function() {
-        var modal = $(this).closest('.cpp-modal-overlay');
-        modal.hide();
-         if (modal.is('#cpp-front-chart-modal') && frontChartInstance) {
-            frontChartInstance.destroy(); frontChartInstance = null;
+    // بستن مودال
+    $(document).on('click', '.cpp-modal-close, .cpp-modal-overlay', function(e) {
+        if (e.target === this || $(this).hasClass('cpp-modal-close')) {
+            $('.cpp-modal-overlay').hide();
+            if (frontChartInstance) { frontChartInstance.destroy(); frontChartInstance = null; }
         }
     });
-    $(document).on('click', '.cpp-modal-overlay', function(e) {
-        if ($(e.target).is('.cpp-modal-overlay')) {
-             var modal = $(this);
-             modal.hide();
-             if (modal.is('#cpp-front-chart-modal') && frontChartInstance) {
-                frontChartInstance.destroy(); frontChartInstance = null;
-            }
-        }
-    });
-
-    $('.cpp-grid-view-filters .filter-btn').on('click', function(e){
-        e.preventDefault();
-        var $this = $(this);
-        var catId = $this.data('cat-id');
-        var wrapper = $this.closest('.cpp-grid-view-wrapper');
-        wrapper.find('.cpp-grid-view-filters .filter-btn').removeClass('active');
-        $this.addClass('active');
-        if (catId === 'all') {
-            wrapper.find('.cpp-grid-view-table .product-row').show();
-        } else {
-            wrapper.find('.cpp-grid-view-table .product-row').hide();
-            wrapper.find('.cpp-grid-view-table .product-row[data-cat-id="' + catId + '"]').show();
-        }
-        wrapper.find('.cpp-grid-view-footer').toggle(catId === 'all'); 
-    });
-
+    
+    // --- مدیریت دکمه مشاهده بیشتر (Load More) ---
     $(document).on('click', '.cpp-view-more-btn', function() {
         var button = $(this);
         var wrapper = button.closest('.cpp-grid-view-wrapper');
@@ -243,6 +297,24 @@ jQuery(document).ready(function($) {
         });
     });
 
+     // فیلتر دسته‌بندی (Grid View)
+    $('.cpp-grid-view-filters .filter-btn').on('click', function(e){
+        e.preventDefault();
+        var $this = $(this);
+        var catId = $this.data('cat-id');
+        var wrapper = $this.closest('.cpp-grid-view-wrapper');
+        wrapper.find('.cpp-grid-view-filters .filter-btn').removeClass('active');
+        $this.addClass('active');
+        if (catId === 'all') {
+            wrapper.find('.cpp-grid-view-table .product-row').show();
+        } else {
+            wrapper.find('.cpp-grid-view-table .product-row').hide();
+            wrapper.find('.cpp-grid-view-table .product-row[data-cat-id="' + catId + '"]').show();
+        }
+        wrapper.find('.cpp-grid-view-footer').toggle(catId === 'all'); 
+    });
+
+    // مقداردهی اولیه‌ی متون (اگر تعریف نشده باشند)
      cpp_front_vars.i18n = cpp_front_vars.i18n || {};
      cpp_front_vars.i18n.sending = cpp_front_vars.i18n.sending || 'در حال ارسال...';
      cpp_front_vars.i18n.server_error = cpp_front_vars.i18n.server_error || 'خطای سرور.';
