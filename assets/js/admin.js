@@ -1,315 +1,180 @@
 jQuery(document).ready(function ($) {
 
     // 1. آکاردئون
-    $('.cpp-accordion-header').on('click', function () {
-        $(this).toggleClass('active').next('.cpp-accordion-content').slideToggle(300);
-    });
-
-    if ($('.cpp-accordion-content').length && !$('.cpp-accordion-content').find('.notice-error, .error').length && !window.location.hash) {
-       $('.cpp-accordion-content').hide(); 
-       $('.cpp-accordion-header').removeClass('active');
-    }
-    
-    if (window.location.hash) {
-        var targetAccordion = $(window.location.hash);
-        if (targetAccordion.hasClass('cpp-accordion-content')) {
-            targetAccordion.show();
-            targetAccordion.prev('.cpp-accordion-header').addClass('active');
-        }
-    }
+    $('.cpp-accordion-header').on('click', function () { $(this).toggleClass('active').next('.cpp-accordion-content').slideToggle(300); });
+    if ($('.cpp-accordion-content').length && !$('.cpp-accordion-content').find('.notice-error, .error').length && !window.location.hash) { $('.cpp-accordion-content').hide(); $('.cpp-accordion-header').removeClass('active'); }
+    if (window.location.hash) { var target = $(window.location.hash); if (target.hasClass('cpp-accordion-content')) { target.show(); target.prev('.cpp-accordion-header').addClass('active'); } }
 
     // 2. آپلودر
     var mediaUploader;
     $(document).on('click', '.cpp-upload-btn', function (e) {
-        e.preventDefault();
-        var button = $(this);
-        var inputId = button.data("input-id");
-        var input_field = inputId ? jQuery("#" + inputId) : button.siblings('input[type="text"]');
-        if (!input_field.length) {
-             input_field = button.closest('td').find('input[type="text"]');
-        }
-        var preview_img_container = button.closest('td, .cpp-image-uploader-wrapper, .form-table tr').find(".cpp-image-preview"); 
-
+        e.preventDefault(); var button = $(this); var inputId = button.data("input-id"); var input_field = inputId ? jQuery("#" + inputId) : button.siblings('input[type="text"]');
+        if (!input_field.length) input_field = button.closest('td').find('input[type="text"]');
         if (!input_field.length) return;
-
         mediaUploader = wp.media({ title: 'انتخاب تصویر', button: { text: 'استفاده' }, multiple: false });
-
         (function(target_input, target_preview) {
-            mediaUploader.off('select'); 
-            mediaUploader.on('select', function () {
+            mediaUploader.off('select'); mediaUploader.on('select', function () {
                 var attachment = mediaUploader.state().get('selection').first().toJSON();
                 target_input.val(attachment.url).trigger('change');
-                 if(target_preview.length) target_preview.html('<img src="' + attachment.url + '" style="max-width: 100px; height: auto; margin-top: 10px; border: 1px solid #ddd; padding: 3px;">');
-            });
-            mediaUploader.open();
-        })(input_field, preview_img_container);
+                 if(target_preview.length) target_preview.html('<img src="' + attachment.url + '" style="max-width: 100px; margin-top: 10px;">');
+            }); mediaUploader.open();
+        })(input_field, button.closest('td').find(".cpp-image-preview"));
     });
 
     // 3. ویرایش سریع
     $(document).on('dblclick', '.cpp-quick-edit, .cpp-quick-edit-select', function () {
-        var cell = $(this);
-        if (cell.hasClass('editing') || cell.closest('td').hasClass('editing-td')) return;
-
-        var id = cell.data('id'), field = cell.data('field'), table_type = cell.data('table-type');
-        var original_html = cell.html(); 
-        var original_text_content = cell.clone().children().remove().end().text().trim();
-        var input_element;
-        var target_element = cell;
+        var cell = $(this); if (cell.hasClass('editing') || cell.closest('td').hasClass('editing-td')) return;
+        var id = cell.data('id'), field = cell.data('field'), table = cell.data('table-type');
+        var val = cell.text().trim(); var input;
 
         if (cell.hasClass('cpp-quick-edit-select')) {
-             cell.data('original-content', original_html).addClass('editing');
-            var current_value = cell.data('current');
-            input_element = $('<select>').addClass('cpp-quick-edit-input');
-             var options_list = (table_type === 'orders') ? cpp_admin_vars.order_statuses : cpp_admin_vars.product_statuses;
-             if (!options_list) options_list = {};
-
-            $.each(options_list, function (val, text) {
-                $('<option>').val(val).text(text).prop('selected', val == current_value).appendTo(input_element);
-            });
-
+            cell.addClass('editing'); input = $('<select>').addClass('cpp-quick-edit-input');
+            var opts = (table === 'orders') ? cpp_admin_vars.order_statuses : cpp_admin_vars.product_statuses;
+            $.each(opts, function(k, v){ $('<option>').val(k).text(v).prop('selected', k == cell.data('current')).appendTo(input); });
         } else if (field === 'min_price' || field === 'max_price') {
-             var td = cell.closest('td');
-             if (td.hasClass('editing-td')) return;
-             td.addClass('editing-td');
-             target_element = td;
-
-             var min_span = td.find('[data-field="min_price"]');
-             var max_span = td.find('[data-field="max_price"]');
-             td.data('original-content', td.html());
-
-             var min_val = min_span.text().trim();
-             var max_val = max_span.text().trim();
-
-             var container = $('<div>');
-             var min_input = $('<input type="text">').addClass('cpp-quick-edit-input small-text').val(min_val).attr('data-field', 'min_price');
-             var max_input = $('<input type="text">').addClass('cpp-quick-edit-input small-text').val(max_val).attr('data-field', 'max_price');
-             
-             container.append(min_input).append(' - ').append(max_input);
-             input_element = container;
-             td.css('width', 'auto'); 
-
+             var td = cell.closest('td'); td.addClass('editing-td');
+             var minv = td.find('[data-field="min_price"]').text().trim(); var maxv = td.find('[data-field="max_price"]').text().trim();
+             input = $('<div>').append($('<input>').addClass('cpp-quick-edit-input small-text').val(minv).attr('data-field','min_price')).append(' - ').append($('<input>').addClass('cpp-quick-edit-input small-text').val(maxv).attr('data-field','max_price'));
+             cell = td;
         } else {
-            cell.data('original-content', original_html).addClass('editing');
-            if (field === 'admin_note' || field === 'description') {
-                input_element = $('<textarea>').addClass('cpp-quick-edit-input').val(original_text_content);
-            } else {
-                input_element = $('<input>').attr('type', 'text').addClass('cpp-quick-edit-input').val(original_text_content);
-            }
+            cell.addClass('editing');
+            input = (field === 'admin_note' || field === 'description') ? $('<textarea>').addClass('cpp-quick-edit-input').val(val) : $('<input>').addClass('cpp-quick-edit-input').val(val);
         }
 
-        var save_btn = $('<button>').addClass('button button-primary button-small').text(cpp_admin_vars.i18n.save || 'ذخیره');
-        var cancel_btn = $('<button>').addClass('button button-secondary button-small').text(cpp_admin_vars.i18n.cancel || 'لغو').css('margin-right', '5px');
-        var buttons = $('<div>').addClass('cpp-quick-edit-buttons').css('margin-top', '5px').append(save_btn).append(cancel_btn);
-
-        target_element.html('').append(input_element).append(buttons);
-        input_element.find('input, select, textarea').first().focus();
-
-        save_btn.on('click', function () {
-             if (field === 'min_price' || field === 'max_price') performSavePriceRange(td, id, table_type);
-             else performSave(cell, id, field, table_type);
-         });
-        cancel_btn.on('click', function () {
-             if (field === 'min_price' || field === 'max_price') td.removeClass('editing-td').html(td.data('original-content'));
-             else cell.removeClass('editing').html(cell.data('original-content'));
-         });
-         $(input_element).find('input, select, textarea').on('keydown', function (e) {
-            if (e.key === 'Escape') cancel_btn.click();
-            else if (e.key === 'Enter' && !$(this).is('textarea')) { e.preventDefault(); save_btn.click(); }
+        var save = $('<button>').addClass('button button-primary button-small').text('ذخیره').click(function(){
+            if(field==='min_price'||field==='max_price') saveRange(cell, id, table); else saveSingle(cell, id, field, table);
         });
+        var cancel = $('<button>').addClass('button button-small').text('لغو').click(function(){ window.location.reload(); });
+        
+        cell.html(input).append($('<div>').addClass('cpp-quick-edit-buttons').append(save).append(cancel));
+        input.find('input,textarea,select').first().focus();
     });
 
-    function performSavePriceRange(td, id, table_type) {
-        var min_input = td.find('input[data-field="min_price"]');
-        var max_input = td.find('input[data-field="max_price"]');
-        var min_value = min_input.val();
-        var max_value = max_input.val();
-        var original_html = td.data('original-content');
-
-        td.html(cpp_admin_vars.i18n.saving || 'در حال ذخیره...');
-
-        var p1 = $.post(cpp_admin_vars.ajax_url, { action: 'cpp_quick_update', security: cpp_admin_vars.nonce, id: id, field: 'min_price', value: min_value, table_type: table_type });
-        var p2 = $.post(cpp_admin_vars.ajax_url, { action: 'cpp_quick_update', security: cpp_admin_vars.nonce, id: id, field: 'max_price', value: max_value, table_type: table_type });
-
-        $.when(p1, p2).done(function (r1, r2) {
-            td.removeClass('editing-td');
-            if (r1[0].success && r2[0].success) {
-                var s1 = $('<span>').addClass('cpp-quick-edit').attr('data-id', id).attr('data-field', 'min_price').attr('data-table-type', table_type).text(min_value);
-                var s2 = $('<span>').addClass('cpp-quick-edit').attr('data-id', id).attr('data-field', 'max_price').attr('data-table-type', table_type).text(max_value);
-                td.html('').append(s1).append(' - ').append(s2);
-                if (r1[0].data.new_time) td.closest('tr').find('.cpp-last-update').text(r1[0].data.new_time);
-            } else { alert('خطا در ذخیره'); td.html(original_html); }
-        }).fail(function () { td.removeClass('editing-td'); alert('خطای سرور'); td.html(original_html); });
+    function saveRange(td, id, table) {
+        var min = td.find('input[data-field="min_price"]').val(), max = td.find('input[data-field="max_price"]').val();
+        td.text('ذخیره...');
+        $.when(
+            $.post(cpp_admin_vars.ajax_url, { action: 'cpp_quick_update', security: cpp_admin_vars.nonce, id: id, field: 'min_price', value: min, table_type: table }),
+            $.post(cpp_admin_vars.ajax_url, { action: 'cpp_quick_update', security: cpp_admin_vars.nonce, id: id, field: 'max_price', value: max, table_type: table })
+        ).done(function(){ window.location.reload(); }).fail(function(){ alert('خطا'); });
     }
 
-    function performSave(cell, id, field, table_type) {
-        var inputField = cell.find('.cpp-quick-edit-input');
-        var new_value = inputField.val();
-        var original_html = cell.data('original-content');
-
-        cell.html(cpp_admin_vars.i18n.saving || 'در حال ذخیره...');
-        $.post(cpp_admin_vars.ajax_url, {
-            action: 'cpp_quick_update', security: cpp_admin_vars.nonce, id: id, field: field, value: new_value, table_type: table_type
-        }, function (response) {
-            cell.removeClass('editing');
-            if (response.success) {
-                var display_val = response.data.display_value || new_value; 
-                if (cell.hasClass('cpp-quick-edit-select')) {
-                     var opts = (table_type === 'orders') ? cpp_admin_vars.order_statuses : cpp_admin_vars.product_statuses;
-                     display_val = opts[new_value] || new_value;
-                }
-                cell.data('current', new_value).html(display_val);
-                if (response.data.new_time) cell.closest('tr').find('.cpp-last-update').text(response.data.new_time);
-            } else { alert('خطا: ' + (response.data.message || 'Error')); cell.html(original_html); }
-        }).fail(function () { cell.removeClass('editing'); alert('خطای سرور'); cell.html(original_html); });
+    function saveSingle(cell, id, field, table) {
+        var val = cell.find('.cpp-quick-edit-input').val(); cell.text('ذخیره...');
+        $.post(cpp_admin_vars.ajax_url, { action: 'cpp_quick_update', security: cpp_admin_vars.nonce, id: id, field: field, value: val, table_type: table }, function(res){
+            if(res.success) window.location.reload(); else alert('خطا');
+        });
     }
 
-    // 4. پاپ‌آپ‌ها
-    function openEditModal(ajax_data) {
-        if ($('#cpp-edit-modal').length === 0) $('body').append('<div id="cpp-edit-modal" class="cpp-modal-overlay" style="display: none;"><div class="cpp-modal-container"><span class="cpp-close-modal">×</span><div class="cpp-edit-modal-content"></div></div></div>');
-        var modal = $('#cpp-edit-modal');
-        modal.css('display', 'flex').addClass('loading').find('.cpp-edit-modal-content').html('<p style="text-align:center;padding:20px;">' + (cpp_admin_vars.i18n.loadingForm || 'بارگذاری...') + '</p>');
-
-        $.get(cpp_admin_vars.ajax_url, ajax_data).done(function (res) {
-            modal.removeClass('loading');
-            if (res.success) {
-                modal.find('.cpp-edit-modal-content').html(res.data.html);
-                if (typeof window.cpp_init_media_uploader === 'function') window.cpp_init_media_uploader();
-                if (modal.find('.cpp-color-picker').length) modal.find('.cpp-color-picker').wpColorPicker();
-            } else modal.find('.cpp-edit-modal-content').html('<p style="color:red;text-align:center;">' + (res.data.message || 'خطا') + '</p>');
-        }).fail(function () { modal.removeClass('loading').find('.cpp-edit-modal-content').html('<p style="color:red;text-align:center;">خطای سرور</p>'); });
-    }
-
-    $(document).on('click', '.cpp-close-modal, .cpp-modal-overlay', function (e) {
-        if (e.target === this || $(this).hasClass('cpp-close-modal')) {
-            $('.cpp-modal-overlay').hide();
-            if (typeof chartInstance !== 'undefined' && chartInstance) { chartInstance.destroy(); chartInstance = null; }
-        }
-    });
-
-    $(document).on('click', '.cpp-edit-button, .cpp-edit-cat-button', function (e) {
-        e.preventDefault();
-        var btn = $(this);
-        var data = { security: cpp_admin_vars.nonce };
-        if (btn.hasClass('cpp-edit-button')) { data.action = 'cpp_fetch_product_edit_form'; data.id = btn.data('product-id'); }
-        else { data.action = 'cpp_fetch_category_edit_form'; data.id = btn.data('cat-id'); }
-        openEditModal(data);
-    });
-
-    // 5. رسم نمودار (اصلاح ترتیب دیتاست‌ها برای هاشور صحیح)
+    // 4. نمودار با امکانات (فیلتر، دانلود، زوم، لوگو)
     var chartInstance = null;
+    var fullData = null;
+
     $(document).on('click', '.cpp-show-chart', function (e) {
         e.preventDefault();
         var pid = $(this).data('product-id');
-        // افزودن div برای پس‌زمینه لوگو
-        if ($('#cpp-chart-modal').length === 0) $('body').append('<div id="cpp-chart-modal" class="cpp-modal-overlay" style="display:none;"><div class="cpp-modal-container"><span class="cpp-close-modal">×</span><h2>نمودار قیمت</h2><div class="cpp-chart-modal-content"><div class="cpp-chart-bg"></div><canvas id="cppPriceChart"></canvas></div></div></div>');
+        
+        if ($('#cpp-chart-modal').length === 0) {
+             var html = '<div id="cpp-chart-modal" class="cpp-modal-overlay" style="display:none;">' +
+                '<div class="cpp-modal-container cpp-chart-background">' +
+                '<span class="cpp-close-modal">×</span>' +
+                '<h2>نمودار قیمت</h2>' +
+                '<div class="cpp-chart-toolbar" style="margin-bottom:10px; direction:ltr; text-align:left;">' +
+                    '<button class="button cpp-filter active" data-r="all">همه</button> ' +
+                    '<button class="button cpp-filter" data-r="12">1 سال</button> ' +
+                    '<button class="button cpp-filter" data-r="6">6 ماه</button> ' +
+                    '<button class="button cpp-filter" data-r="3">3 ماه</button> ' +
+                    '<button class="button cpp-filter" data-r="1">1 ماه</button> ' +
+                    '<button class="button cpp-filter" data-r="0.25">1 هفته</button> ' +
+                    '<button class="button button-primary cpp-dl" style="margin-left:10px;">دانلود</button>' +
+                '</div>' +
+                '<div class="cpp-chart-modal-content"><div class="cpp-chart-bg"></div><canvas id="cppPriceChart"></canvas></div>' +
+                '</div></div>';
+             $('body').append(html);
+        }
         
         var modal = $('#cpp-chart-modal');
         var ctx = modal.find('#cppPriceChart');
+        if(cpp_admin_vars.logo_url) modal.find('.cpp-chart-bg').css({'background-image':'url('+cpp_admin_vars.logo_url+')', 'opacity':'0.1'});
         
-        // اعمال تصویر پس‌زمینه (واترمارک)
-        if (cpp_admin_vars.logo_url) {
-            modal.find('.cpp-chart-bg').css({
-                'background-image': 'url(' + cpp_admin_vars.logo_url + ')',
-                'background-repeat': 'no-repeat',
-                'background-position': 'center center',
-                'background-size': '200px', 
-                'opacity': '0.1' 
-            });
+        modal.css('display', 'flex');
+        if(chartInstance) chartInstance.destroy();
+
+        $.get(cpp_admin_vars.ajax_url, { action: 'cpp_get_chart_data', product_id: pid, security: cpp_admin_vars.nonce }).done(function (res) {
+            if (res.success) {
+                fullData = res.data;
+                renderChart(ctx, fullData, 'all');
+            } else { alert(res.data.message); modal.hide(); }
+        });
+    });
+
+    $(document).on('click', '.cpp-filter', function(){
+        $('.cpp-filter').removeClass('active'); $(this).addClass('active');
+        var r = $(this).data('r');
+        if(chartInstance) chartInstance.destroy();
+        renderChart($('#cppPriceChart'), fullData, r);
+    });
+
+    $(document).on('click', '.cpp-dl', function(){
+        var a = document.createElement('a');
+        a.href = chartInstance.toBase64Image(); a.download = 'chart.png'; a.click();
+    });
+
+    function renderChart(ctx, data, range) {
+        var L=data.labels, P=data.prices, Min=data.min_prices, Max=data.max_prices;
+
+        if(range !== 'all') {
+            var count = Math.floor(parseFloat(range) * 30); // تخمین ۳۰ روز در ماه
+            if(L.length > count) {
+                var start = L.length - count;
+                L=L.slice(start); P=P.slice(start); Min=Min.slice(start); Max=Max.slice(start);
+            }
         }
 
-        modal.css('display', 'flex');
-        if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+        var ds = [];
+        // ترتیب مهم: Min -> Base -> Max برای fill صحیح
+        ds.push({ label: 'حداقل', data: Min, borderColor: 'rgba(54, 162, 235, 0.8)', borderDash:[5,5], pointRadius:0, fill: false });
+        ds.push({ 
+            label: 'قیمت پایه', data: P, borderColor: 'rgb(75, 192, 192)', tension: 0.1, borderWidth: 3,
+            fill: { target: 0, above: 'rgba(54, 162, 235, 0.15)' } // پر کردن تا حداقل (آبی)
+        });
+        ds.push({ 
+            label: 'حداکثر', data: Max, borderColor: 'rgba(255, 99, 132, 0.8)', borderDash:[5,5], pointRadius:0, 
+            fill: { target: 1, above: 'rgba(255, 99, 132, 0.15)' } // پر کردن تا پایه (قرمز)
+        });
+
+        chartInstance = new Chart(ctx, {
+            type: 'line', data: { labels: L, datasets: ds },
+            options: {
+                responsive: true, maintainAspectRatio: false, spanGaps: true,
+                plugins: { filler: { propagate: false } },
+                interaction: { mode: 'index', intersect: false },
+                scales: { y: { beginAtZero: false } }
+            }
+        });
+    }
+
+    // سایر بخش‌ها
+    $(document).on('click', '.cpp-close-modal, .cpp-modal-overlay', function(e){ if(e.target==this || $(this).hasClass('cpp-close-modal')) $('.cpp-modal-overlay').hide(); });
+    $(document).on('click', '.cpp-edit-button, .cpp-edit-cat-button', function (e) {
+        e.preventDefault(); var btn=$(this); var data={security:cpp_admin_vars.nonce};
+        if(btn.hasClass('cpp-edit-button')){ data.action='cpp_fetch_product_edit_form'; data.id=btn.data('product-id'); }
+        else{ data.action='cpp_fetch_category_edit_form'; data.id=btn.data('cat-id'); }
         
-        $.get(cpp_admin_vars.ajax_url, { action: 'cpp_get_chart_data', product_id: pid, security: cpp_admin_vars.nonce }).done(function (res) {
-            if (res.success && res.data.labels) {
-                 var ds = [];
-                 
-                 // نکته کلیدی: ترتیب افزودن دیتاست‌ها برای پر شدن صحیح رنگ‌ها
-                 // لایه ۰: حداقل قیمت
-                 if (res.data.min_prices) {
-                     ds.push({ 
-                         label: 'حداقل', 
-                         data: res.data.min_prices, 
-                         borderColor: 'rgba(54, 162, 235, 0.8)', // آبی پررنگ
-                         borderDash: [5,5], 
-                         pointRadius: 0,
-                         fill: false 
-                     });
-                 }
-
-                 // لایه ۱: قیمت پایه (فاصله تا لایه ۰ را آبی کن)
-                 if (res.data.prices) {
-                     ds.push({ 
-                         label: 'قیمت پایه', 
-                         data: res.data.prices, 
-                         borderColor: 'rgb(75, 192, 192)', // سبزآبی
-                         tension: 0.1, 
-                         borderWidth: 3,
-                         fill: {
-                             target: 0, // اشاره به ایندکس ۰ (حداقل قیمت)
-                             above: 'rgba(54, 162, 235, 0.2)' // آبی کمرنگ
-                         }
-                     });
-                 }
-
-                 // لایه ۲: حداکثر قیمت (فاصله تا لایه ۱ را قرمز کن)
-                 if (res.data.max_prices) {
-                     ds.push({ 
-                         label: 'حداکثر', 
-                         data: res.data.max_prices, 
-                         borderColor: 'rgba(255, 99, 132, 0.8)', // قرمز پررنگ
-                         borderDash: [5,5], 
-                         pointRadius: 0,
-                         fill: {
-                             target: 1, // اشاره به ایندکس ۱ (قیمت پایه)
-                             above: 'rgba(255, 99, 132, 0.2)' // قرمز کمرنگ
-                         }
-                     });
-                 }
-                 
-                 chartInstance = new Chart(ctx, { 
-                     type: 'line', 
-                     data: { labels: res.data.labels, datasets: ds }, 
-                     options: { 
-                         responsive: true, 
-                         maintainAspectRatio: false,
-                         spanGaps: true,
-                         plugins: {
-                             filler: { propagate: false } // جلوگیری از تداخل رنگ‌ها
-                         },
-                         interaction: {
-                             mode: 'index',
-                             intersect: false,
-                         },
-                         scales: { y: { beginAtZero: false } }
-                     } 
-                 });
-            } else { alert(res.data.message || 'داده‌ای یافت نشد'); modal.hide(); }
-        }).fail(function () { alert('خطای دریافت داده'); modal.hide(); });
+        if($('#cpp-edit-modal').length===0) $('body').append('<div id="cpp-edit-modal" class="cpp-modal-overlay" style="display:none;"><div class="cpp-modal-container"><span class="cpp-close-modal">×</span><div class="cpp-edit-modal-content"></div></div></div>');
+        var m=$('#cpp-edit-modal'); m.css('display','flex').find('.cpp-edit-modal-content').html('بارگذاری...');
+        $.get(cpp_admin_vars.ajax_url, data).done(function(res){ m.find('.cpp-edit-modal-content').html(res.data.html); if(window.cpp_init_media_uploader) window.cpp_init_media_uploader(); });
     });
-
-    // 6. ارسال فرم‌های ویرایش
-    $(document).on('submit', '#cpp-edit-product-form, #cpp-edit-category-form', function (e) {
-        e.preventDefault();
-        var form = $(this);
-        var action = form.attr('id') === 'cpp-edit-product-form' ? 'cpp_handle_edit_product_ajax' : 'cpp_handle_edit_category_ajax';
-        var btn = form.find('input[type="submit"]');
-        btn.prop('disabled', true).val('در حال ذخیره...');
-        
-        $.post(cpp_admin_vars.ajax_url, form.serialize() + '&action=' + action, function(res){
-            if(res.success) { alert('ذخیره شد'); $('#cpp-edit-modal').hide(); window.location.reload(); }
-            else { alert(res.data.message || 'خطا'); btn.prop('disabled', false).val('ذخیره'); }
-        }).fail(function(){ alert('خطای سرور'); btn.prop('disabled', false).val('ذخیره'); });
+    
+    $(document).on('submit', '#cpp-edit-product-form, #cpp-edit-category-form', function(e){
+        e.preventDefault(); var form=$(this); 
+        var act = form.attr('id')==='cpp-edit-product-form'?'cpp_handle_edit_product_ajax':'cpp_handle_edit_category_ajax';
+        $.post(cpp_admin_vars.ajax_url, form.serialize()+'&action='+act, function(res){ if(res.success){alert('ذخیره شد'); window.location.reload();}else alert('خطا'); });
     });
-
-    // 7. دکمه‌های تست
-    $('#cpp-load-email-template').click(function(){ if(confirm('مطمئنید؟')) { var t = $('#cpp-email-template-html').html(); if(typeof tinymce!='undefined' && tinymce.get('cpp_email_body_template')) tinymce.get('cpp_email_body_template').setContent(t); else $('#cpp_email_body_template').val(t); } });
     
     $('#cpp-test-email-btn, #cpp-test-sms-btn').click(function(){
-        var btn = $(this), log = btn.siblings('textarea'), act = (btn.attr('id')==='cpp-test-email-btn')?'cpp_test_email':'cpp_test_sms';
-        btn.prop('disabled', true); log.val('ارسال...');
-        $.post(cpp_admin_vars.ajax_url, { action: act, security: cpp_admin_vars.nonce }, function(res){
-            log.val(res.data.log || JSON.stringify(res)); btn.prop('disabled', false);
-        }).fail(function(x){ log.val('خطا: '+x.responseText); btn.prop('disabled', false); });
+        var btn=$(this); btn.prop('disabled',true);
+        var act = (btn.attr('id')==='cpp-test-email-btn')?'cpp_test_email':'cpp_test_sms';
+        $.post(cpp_admin_vars.ajax_url, {action:act, security:cpp_admin_vars.nonce}, function(res){ btn.siblings('textarea').val(res.data.log); btn.prop('disabled',false); });
     });
 });
