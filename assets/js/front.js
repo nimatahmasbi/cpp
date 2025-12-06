@@ -18,12 +18,13 @@ jQuery(document).ready(function($) {
             } else {
                 captchaElement.text('خطا');
             }
-        }).fail(function() { captchaElement.text('خطا'); });
+        }).fail(function(jqXHR) {
+            captchaElement.text('خطا');
+        });
     }
 
     // باز کردن مودال ثبت سفارش
-    $(document).on('click', '.cpp-order-btn', function(e) {
-        e.preventDefault();
+    $(document).on('click', '.cpp-order-btn', function() {
         var button = $(this); 
         var productId = button.data('product-id');
         var productName = button.data('product-name');
@@ -39,7 +40,7 @@ jQuery(document).ready(function($) {
         modal.find('.cpp-form-message').remove();
         modal.find('form')[0].reset();
         refreshCaptcha(); 
-        modal.show(); // یا css('display', 'flex') اگر استایل فلکس دارید
+        modal.show(); 
     });
 
     $(document).on('click', '.cpp-refresh-captcha', refreshCaptcha);
@@ -68,9 +69,8 @@ jQuery(document).ready(function($) {
         });
     });
 
-    // باز کردن مودال نمودار
-     $(document).on('click', '.cpp-chart-btn', function(e) {
-        e.preventDefault();
+    // باز کردن مودال نمودار (با تنظیمات جدید)
+     $(document).on('click', '.cpp-chart-btn', function() {
         var productId = $(this).data('product-id');
         
         if ($('#cpp-front-chart-modal').length === 0) {
@@ -92,7 +92,7 @@ jQuery(document).ready(function($) {
             chartCanvas.css({'position':'relative', 'z-index':1});
         }
 
-        modal.css('display', 'flex'); // برای وسط چین
+        modal.css('display', 'flex'); 
         chartContainer.find('.chart-error, .chart-loading').remove(); 
         chartCanvas.show(); 
 
@@ -101,7 +101,7 @@ jQuery(document).ready(function($) {
 
         $.get(cpp_front_vars.ajax_url, { action: 'cpp_get_chart_data', product_id: productId, nonce: cpp_front_vars.nonce }, function(response) { 
             chartContainer.find('.chart-loading').remove(); 
-            if (response.success && response.data && response.data.labels) {
+            if (response.success && response.data && response.data.labels && response.data.labels.length > 0) {
                  renderFrontChart(response.data, chartCanvas[0]);
              } else {
                  chartCanvas.hide();
@@ -116,19 +116,44 @@ jQuery(document).ready(function($) {
 
     function renderFrontChart(chartData, ctx) {
         var datasets = [];
+        
+        // ترتیب لایه‌ها: 0=حداقل، 1=پایه، 2=حداکثر
         if (chartData.min_prices) {
-            datasets.push({ label: 'حداقل', data: chartData.min_prices, borderColor: 'rgba(54, 162, 235, 0.8)', borderDash: [5, 5], pointRadius: 0, fill: false });
-        }
-        if (chartData.prices) {
             datasets.push({ 
-                label: 'قیمت پایه', data: chartData.prices, borderColor: 'rgb(75, 192, 192)', tension: 0.1, borderWidth: 3,
-                fill: { target: 0, above: 'rgba(54, 162, 235, 0.15)' } // پر کردن فاصله تا حداقل
+                label: 'حداقل', 
+                data: chartData.min_prices, 
+                borderColor: 'rgba(54, 162, 235, 0.8)', 
+                borderDash: [5, 5], 
+                pointRadius: 0, 
+                fill: false 
             });
         }
+        
+        if (chartData.prices) {
+            datasets.push({ 
+                label: 'قیمت پایه', 
+                data: chartData.prices, 
+                borderColor: 'rgb(75, 192, 192)', 
+                tension: 0.1, 
+                borderWidth: 3,
+                fill: { 
+                    target: 0, // پر کردن فاصله تا حداقل (ایندکس 0)
+                    above: 'rgba(54, 162, 235, 0.15)' // آبی کمرنگ
+                }
+            });
+        }
+        
         if (chartData.max_prices) {
             datasets.push({ 
-                label: 'حداکثر', data: chartData.max_prices, borderColor: 'rgba(255, 99, 132, 0.8)', borderDash: [5, 5], pointRadius: 0, 
-                fill: { target: 1, above: 'rgba(255, 99, 132, 0.15)' } // پر کردن فاصله تا پایه
+                label: 'حداکثر', 
+                data: chartData.max_prices, 
+                borderColor: 'rgba(255, 99, 132, 0.8)', 
+                borderDash: [5, 5], 
+                pointRadius: 0, 
+                fill: { 
+                    target: 1, // پر کردن فاصله تا پایه (ایندکس 1)
+                    above: 'rgba(255, 99, 132, 0.15)' // قرمز کمرنگ
+                }
             });
         }
 
@@ -149,10 +174,80 @@ jQuery(document).ready(function($) {
         } catch(e) { console.error(e); }
     }
 
-    $(document).on('click', '.cpp-modal-close, .cpp-modal-overlay', function(e) {
-        if (e.target === this || $(this).hasClass('cpp-modal-close')) {
-            $('.cpp-modal-overlay').hide();
-            if (frontChartInstance) { frontChartInstance.destroy(); frontChartInstance = null; }
+    $(document).on('click', '.cpp-modal-close', function() {
+        var modal = $(this).closest('.cpp-modal-overlay');
+        modal.hide();
+         if (modal.is('#cpp-front-chart-modal') && frontChartInstance) {
+            frontChartInstance.destroy(); frontChartInstance = null;
         }
     });
+    $(document).on('click', '.cpp-modal-overlay', function(e) {
+        if ($(e.target).is('.cpp-modal-overlay')) {
+             var modal = $(this);
+             modal.hide();
+             if (modal.is('#cpp-front-chart-modal') && frontChartInstance) {
+                frontChartInstance.destroy(); frontChartInstance = null;
+            }
+        }
+    });
+
+    $('.cpp-grid-view-filters .filter-btn').on('click', function(e){
+        e.preventDefault();
+        var $this = $(this);
+        var catId = $this.data('cat-id');
+        var wrapper = $this.closest('.cpp-grid-view-wrapper');
+        wrapper.find('.cpp-grid-view-filters .filter-btn').removeClass('active');
+        $this.addClass('active');
+        if (catId === 'all') {
+            wrapper.find('.cpp-grid-view-table .product-row').show();
+        } else {
+            wrapper.find('.cpp-grid-view-table .product-row').hide();
+            wrapper.find('.cpp-grid-view-table .product-row[data-cat-id="' + catId + '"]').show();
+        }
+        wrapper.find('.cpp-grid-view-footer').toggle(catId === 'all'); 
+    });
+
+    $(document).on('click', '.cpp-view-more-btn', function() {
+        var button = $(this);
+        var wrapper = button.closest('.cpp-grid-view-wrapper');
+        var currentPage = parseInt(button.data('page'), 10); 
+        var nextPage = currentPage + 1;
+        var shortcode_type = button.data('shortcode-type'); 
+        var original_text = cpp_front_vars.i18n.view_more;
+
+        button.prop('disabled', true).text(cpp_front_vars.i18n.loading);
+
+        $.post(cpp_front_vars.ajax_url, {
+            action: 'cpp_load_more_products',
+            nonce: cpp_front_vars.nonce,
+            page: nextPage, 
+            shortcode_type: shortcode_type
+        }, function(response) {
+            if (response.success && response.data && response.data.html) {
+                wrapper.find('.cpp-grid-view-table tbody').append(response.data.html);
+                button.data('page', nextPage); 
+
+                if (!response.data.has_more) {
+                    button.text(cpp_front_vars.i18n.no_more_products).prop('disabled', true);
+                     button.parent().hide(); 
+                } else {
+                    button.prop('disabled', false).text(original_text);
+                }
+            } else {
+                button.text(cpp_front_vars.i18n.no_more_products).prop('disabled', true);
+                 button.parent().hide(); 
+            }
+        }).fail(function(jqXHR, textStatus) {
+            alert(cpp_front_vars.i18n.server_error || 'خطای سرور.');
+            button.prop('disabled', false).text(original_text);
+        });
+    });
+
+     cpp_front_vars.i18n = cpp_front_vars.i18n || {};
+     cpp_front_vars.i18n.sending = cpp_front_vars.i18n.sending || 'در حال ارسال...';
+     cpp_front_vars.i18n.server_error = cpp_front_vars.i18n.server_error || 'خطای سرور.';
+     cpp_front_vars.i18n.view_more = cpp_front_vars.i18n.view_more || 'مشاهده بیشتر';
+     cpp_front_vars.i18n.loading = cpp_front_vars.i18n.loading || 'بارگذاری...';
+     cpp_front_vars.i18n.no_more_products = cpp_front_vars.i18n.no_more_products || 'محصول دیگری نیست.';
+
 });
