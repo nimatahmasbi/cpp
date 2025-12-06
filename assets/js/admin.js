@@ -1,6 +1,6 @@
 jQuery(document).ready(function ($) {
 
-    // 1. مدیریت آکاردئون
+    // 1. آکاردئون
     $('.cpp-accordion-header').on('click', function () {
         $(this).toggleClass('active').next('.cpp-accordion-content').slideToggle(300);
     });
@@ -18,7 +18,7 @@ jQuery(document).ready(function ($) {
         }
     }
 
-    // 2. مدیریت آپلود عکس
+    // 2. آپلودر
     var mediaUploader;
     $(document).on('click', '.cpp-upload-btn', function (e) {
         e.preventDefault();
@@ -195,7 +195,7 @@ jQuery(document).ready(function ($) {
         openEditModal(data);
     });
 
-    // نمایش نمودار
+    // 5. رسم نمودار (با هاشور قرمز در بالا و آبی در پایین)
     var chartInstance = null;
     $(document).on('click', '.cpp-show-chart', function (e) {
         e.preventDefault();
@@ -211,16 +211,74 @@ jQuery(document).ready(function ($) {
         $.get(cpp_admin_vars.ajax_url, { action: 'cpp_get_chart_data', product_id: pid, security: cpp_admin_vars.nonce }).done(function (res) {
             if (res.success && res.data.labels) {
                  var ds = [];
-                 if (res.data.prices) ds.push({ label: 'قیمت پایه', data: res.data.prices, borderColor: 'rgb(75, 192, 192)', tension: 0.1, fill: false });
-                 if (res.data.min_prices) ds.push({ label: 'حداقل', data: res.data.min_prices, borderColor: 'red', borderDash: [5,5], fill: false });
-                 if (res.data.max_prices) ds.push({ label: 'حداکثر', data: res.data.max_prices, borderColor: 'blue', borderDash: [5,5], fill: false });
+
+                 // 1. حداقل قیمت (هاشور آبی به سمت بالا تا قیمت پایه)
+                 if (res.data.min_prices) {
+                     ds.push({ 
+                         label: 'حداقل', 
+                         data: res.data.min_prices, 
+                         borderColor: 'rgba(54, 162, 235, 0.7)', // آبی
+                         backgroundColor: 'rgba(54, 162, 235, 0.2)', // رنگ پس‌زمینه آبی
+                         borderDash: [5,5], 
+                         pointRadius: 0,
+                         fill: false // پر نکردن خودکار، چون با قیمت پایه پر می‌شود
+                     });
+                 }
+
+                 // 2. قیمت پایه (خط اصلی وسط)
+                 if (res.data.prices) {
+                     ds.push({ 
+                         label: 'قیمت پایه', 
+                         data: res.data.prices, 
+                         borderColor: 'rgb(75, 192, 192)', // سبزآبی
+                         tension: 0.1, 
+                         fill: {
+                             target: '-1', // پر کردن فاصله تا دیتاست قبلی (حداقل قیمت)
+                             above: 'rgba(255, 255, 255, 0)', // بالای قیمت پایه خالی
+                             below: 'rgba(54, 162, 235, 0.2)'  // پایین قیمت پایه (تا حداقل) آبی کمرنگ
+                         },
+                         borderWidth: 3
+                     });
+                 }
+
+                 // 3. حداکثر قیمت (هاشور قرمز به سمت پایین تا قیمت پایه)
+                 if (res.data.max_prices) {
+                     ds.push({ 
+                         label: 'حداکثر', 
+                         data: res.data.max_prices, 
+                         borderColor: 'rgba(255, 99, 132, 0.7)', // قرمز
+                         backgroundColor: 'rgba(255, 99, 132, 0.2)', // رنگ پس‌زمینه قرمز
+                         borderDash: [5,5], 
+                         pointRadius: 0,
+                         fill: {
+                             target: '-1', // پر کردن فاصله تا دیتاست قبلی (قیمت پایه)
+                             above: 'rgba(255, 99, 132, 0.2)', // بالای قیمت پایه (تا حداکثر) قرمز کمرنگ
+                             below: 'rgba(255, 255, 255, 0)'
+                         }
+                     });
+                 }
                  
-                 chartInstance = new Chart(ctx, { type: 'line', data: { labels: res.data.labels, datasets: ds }, options: { responsive: true, spanGaps: true } });
+                 chartInstance = new Chart(ctx, { 
+                     type: 'line', 
+                     data: { labels: res.data.labels, datasets: ds }, 
+                     options: { 
+                         responsive: true, 
+                         spanGaps: true,
+                         plugins: {
+                             filler: {
+                                 propagate: false // جلوگیری از تداخل پر کردن
+                             }
+                         },
+                         scales: {
+                             y: { beginAtZero: false } // محور Y از صفر شروع نشود تا تغییرات بهتر دیده شود
+                         }
+                     } 
+                 });
             } else { alert(res.data.message || 'داده‌ای یافت نشد'); modal.hide(); }
         }).fail(function () { alert('خطای دریافت داده'); modal.hide(); });
     });
 
-    // 5. ارسال فرم‌های ویرایش (داخل مدال)
+    // 6. ارسال فرم‌های ویرایش (داخل مدال)
     $(document).on('submit', '#cpp-edit-product-form, #cpp-edit-category-form', function (e) {
         e.preventDefault();
         var form = $(this);
@@ -234,7 +292,7 @@ jQuery(document).ready(function ($) {
         }).fail(function(){ alert('خطای سرور'); btn.prop('disabled', false).val('ذخیره'); });
     });
 
-    // 6. دکمه‌های تست
+    // 7. دکمه‌های تست
     $('#cpp-load-email-template').click(function(){ if(confirm('مطمئنید؟')) { var t = $('#cpp-email-template-html').html(); if(typeof tinymce!='undefined' && tinymce.get('cpp_email_body_template')) tinymce.get('cpp_email_body_template').setContent(t); else $('#cpp_email_body_template').val(t); } });
     
     $('#cpp-test-email-btn, #cpp-test-sms-btn').click(function(){
