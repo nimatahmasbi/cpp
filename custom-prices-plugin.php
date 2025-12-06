@@ -2,14 +2,14 @@
 /**
  * Plugin Name: Custom Prices & Orders
  * Description: افزونه مدیریت قیمت، سفارش، نمودار و چند نقش کاربری.
- * Version: 3.4.3
+ * Version: 3.4.4
  * Author: Mr.NT
  */
 
 if (!defined('ABSPATH')) exit;
 
 global $wpdb;
-define('CPP_VERSION', '3.4.3');
+define('CPP_VERSION', '3.4.4');
 define('CPP_PATH', plugin_dir_path(__FILE__));
 define('CPP_URL', plugin_dir_url(__FILE__));
 define('CPP_TEMPLATES_DIR', CPP_PATH . 'templates/');
@@ -32,7 +32,7 @@ function cpp_activate() {
     if (get_option('cpp_admin_capability') === false) update_option('cpp_admin_capability', ['administrator']);
 }
 
-// شورت‌کد لیست (اصلاح شده: مرتب‌سازی صعودی ID)
+// شورت‌کد لیست (مرتب‌سازی صعودی ID)
 add_shortcode('cpp_products_list', 'cpp_products_list_shortcode');
 function cpp_products_list_shortcode($atts) {
     $atts = shortcode_atts( array( 'cat_id' => '', 'ids' => '', 'status' => '1' ), $atts, 'cpp_products_list' );
@@ -64,7 +64,7 @@ function cpp_products_list_shortcode($atts) {
 
     $where_sql = !empty($where_clauses) ? ' WHERE ' . implode(' AND ', $where_clauses) : '';
     
-    // تغییر ORDER BY به ASC
+    // تغییر به ASC
     $query = "SELECT p.id, p.name, p.product_type, p.unit, p.load_location, p.last_updated_at, p.price, p.min_price, p.max_price, p.image_url, c.name as category_name
               FROM " . CPP_DB_PRODUCTS . " p
               LEFT JOIN " . CPP_DB_CATEGORIES . " c ON p.cat_id = c.id
@@ -86,14 +86,14 @@ function cpp_products_list_shortcode($atts) {
     return ob_get_clean();
 }
 
-// شورت‌کد گرید با تاریخ (اصلاح شده: مرتب‌سازی صعودی ID)
+// شورت‌کد گرید با تاریخ (مرتب‌سازی صعودی ID)
 add_shortcode('cpp_products_grid_view', 'cpp_products_grid_view_shortcode');
 function cpp_products_grid_view_shortcode($atts) {
     global $wpdb;
     $categories = CPP_Core::get_all_categories();
     $products_per_page = max(1, (int) get_option('cpp_products_per_page', 5)); 
     
-    // تغییر ORDER BY به ASC
+    // تغییر به ASC
     $products = $wpdb->get_results($wpdb->prepare(
         "SELECT id, cat_id, name, product_type, unit, load_location, last_updated_at, price, min_price, max_price, image_url
          FROM " . CPP_DB_PRODUCTS . "
@@ -112,14 +112,14 @@ function cpp_products_grid_view_shortcode($atts) {
     return ob_get_clean();
 }
 
-// شورت‌کد گرید بدون تاریخ (اصلاح شده: مرتب‌سازی صعودی ID)
+// شورت‌کد گرید بدون تاریخ (مرتب‌سازی صعودی ID)
 add_shortcode('cpp_products_grid_view_no_date', 'cpp_products_grid_view_no_date_shortcode');
 function cpp_products_grid_view_no_date_shortcode($atts) {
     global $wpdb;
     $categories = CPP_Core::get_all_categories();
     $products_per_page = max(1, (int) get_option('cpp_products_per_page', 5)); 
     
-    // تغییر ORDER BY به ASC
+    // تغییر به ASC
     $products = $wpdb->get_results($wpdb->prepare(
          "SELECT id, cat_id, name, product_type, unit, load_location, last_updated_at, price, min_price, max_price, image_url
          FROM " . CPP_DB_PRODUCTS . "
@@ -161,11 +161,11 @@ function cpp_front_assets() {
             'nonce' => wp_create_nonce('cpp_front_nonce'),
             'logo_url' => $logo_url ? esc_url($logo_url) : '',
             'i18n' => [
-                'sending' => 'در حال ارسال...',
-                'server_error' => 'خطای سرور.',
-                'view_more' => 'مشاهده بیشتر',
-                'loading' => 'بارگذاری...',
-                'no_more_products' => 'محصول دیگری نیست.'
+                'sending' => __('در حال ارسال...', 'cpp-full'),
+                'server_error' => __('خطای سرور، لطفا دوباره تلاش کنید.', 'cpp-full'),
+                'view_more' => __('مشاهده بیشتر', 'cpp-full'),
+                'loading' => __('در حال بارگذاری...', 'cpp-full'),
+                'no_more_products' => __('محصول دیگری برای نمایش وجود ندارد.', 'cpp-full'),
             ]
         ));
     }
@@ -195,7 +195,7 @@ function cpp_load_more_products() {
     $per_page = max(1, (int) get_option('cpp_products_per_page', 5));
     $offset = ($page - 1) * $per_page;
     
-    // تغییر ORDER BY به ASC
+    // تغییر به ASC
     $products = $wpdb->get_results($wpdb->prepare("SELECT * FROM " . CPP_DB_PRODUCTS . " WHERE is_active=1 ORDER BY id ASC LIMIT %d OFFSET %d", $per_page, $offset));
     
     if ($products) {
@@ -244,3 +244,4 @@ function cpp_load_more_products() {
     }
     wp_die();
 }
+?>
