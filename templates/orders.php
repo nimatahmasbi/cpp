@@ -16,7 +16,7 @@ if (!empty($search_term)) {
     $where_clause = $wpdb->prepare( " WHERE product_name LIKE %s OR customer_name LIKE %s OR phone LIKE %s OR qty LIKE %s OR unit LIKE %s OR load_location LIKE %s OR note LIKE %s OR admin_note LIKE %s OR status LIKE %s OR id LIKE %s", $like, $like, $like, $like, $like, $like, $like, $like, $like, $like );
 }
 
-// تغییر ORDER BY به ASC
+// تغییر به ASC
 $orders = $wpdb->get_results("SELECT * FROM " . CPP_DB_ORDERS . $where_clause . " ORDER BY id ASC");
 ?>
 
