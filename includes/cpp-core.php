@@ -77,7 +77,26 @@ class CPP_Core {
           return false;
      }
 
-    // --- تابع دریافت داده‌های نمودار (اصلاح شده) ---
+    /**
+     * تابع کمکی برای تمیزکردن اعداد (تبدیل فارسی به انگلیسی و حذف کاما)
+     */
+    private static function clean_price_value($value) {
+        if ($value === null || $value === '') return null;
+        
+        // تبدیل اعداد فارسی و عربی به انگلیسی
+        $persian = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+        $arabic  = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+        $english = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+        
+        $value = str_replace($persian, $english, $value);
+        $value = str_replace($arabic, $english, $value);
+        
+        // حذف هر چیزی غیر از عدد و نقطه (مثل کاما، فاصله، حروف)
+        $value = preg_replace('/[^0-9.]/', '', $value);
+        
+        return ($value === '') ? null : (float)$value;
+    }
+
     public static function get_chart_data($product_id, $months = 6) {
         global $wpdb;
 
@@ -89,66 +108,51 @@ class CPP_Core {
         $min_prices = [];
         $max_prices = [];
 
-        // 1. دریافت تاریخچه
         $date_limit = date('Y-m-d H:i:s', strtotime("-{$months} months", current_time('timestamp', 1)));
-        $history = $wpdb->get_results($wpdb->prepare("
+
+         $history = $wpdb->get_results($wpdb->prepare("
             SELECT price, min_price, max_price, change_time
             FROM " . CPP_DB_PRICE_HISTORY . "
             WHERE product_id = %d AND change_time >= %s
             ORDER BY change_time ASC
         ", $product_id, $date_limit));
 
-        // 2. دریافت اطلاعات فعلی محصول
-        $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
-
-        // 3. اگر تاریخچه خالی بود، یک ردیف ساختگی از اطلاعات فعلی بساز
-        if (empty($history) && $current_product) {
-            $dummy = new stdClass();
-            $dummy->change_time = $current_product->last_updated_at ? $current_product->last_updated_at : current_time('mysql', 1);
-            $dummy->price = $current_product->price;
-            $dummy->min_price = $current_product->min_price;
-            $dummy->max_price = $current_product->max_price;
-            $history[] = $dummy;
+        // اگر تاریخچه خالی بود، از اطلاعات فعلی استفاده کن
+        if (empty($history)) {
+            $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
+            if ($current_product) {
+                $dummy = new stdClass();
+                $dummy->change_time = $current_product->last_updated_at ? $current_product->last_updated_at : current_time('mysql', 1);
+                $dummy->price = $current_product->price;
+                $dummy->min_price = $current_product->min_price;
+                $dummy->max_price = $current_product->max_price;
+                $history[] = $dummy;
+            }
         }
 
-        // 4. پردازش داده‌ها برای نمودار
         $disable_base_price = get_option('cpp_disable_base_price', 0);
 
         foreach ($history as $row) {
-            // تبدیل تاریخ
             $ts = strtotime(get_date_from_gmt($row->change_time));
             if (!$ts) $ts = current_time('timestamp');
             $labels[] = date_i18n('Y/m/d H:i', $ts);
 
-            // تبدیل قیمت‌ها به عدد (حذف کاما)
-            $p_base = ($row->price !== null && $row->price !== '') ? (float)str_replace(',', '', $row->price) : null;
-            $p_min  = ($row->min_price !== null && $row->min_price !== '') ? (float)str_replace(',', '', $row->min_price) : null;
-            $p_max  = ($row->max_price !== null && $row->max_price !== '') ? (float)str_replace(',', '', $row->max_price) : null;
+            // استفاده از تابع تمیزکننده جدید
+            $p_base = self::clean_price_value($row->price);
+            $p_min  = self::clean_price_value($row->min_price);
+            $p_max  = self::clean_price_value($row->max_price);
 
             $prices[] = (!$disable_base_price) ? $p_base : null;
             $min_prices[] = $p_min;
             $max_prices[] = $p_max;
         }
 
-        // 5. اگر بعد از پردازش همچنان آرایه‌ها خالی بودند (مثلا همه مقادیر null بودند)
-        // و محصول فعلی قیمت داشت، قیمت فعلی را اضافه کن (Fallback نهایی)
+        // بررسی نهایی برای اطمینان از وجود داده
         $has_data = false;
         foreach([$prices, $min_prices, $max_prices] as $arr) {
             if (count(array_filter($arr, function($v) { return $v !== null; })) > 0) {
                 $has_data = true; break;
             }
-        }
-
-        if (!$has_data && $current_product) {
-            $labels[] = date_i18n('Y/m/d H:i', current_time('timestamp'));
-            
-            $cur_base = ($current_product->price !== '') ? (float)str_replace(',', '', $current_product->price) : null;
-            $cur_min = ($current_product->min_price !== '') ? (float)str_replace(',', '', $current_product->min_price) : null;
-            $cur_max = ($current_product->max_price !== '') ? (float)str_replace(',', '', $current_product->max_price) : null;
-
-            $prices[] = (!$disable_base_price) ? $cur_base : null;
-            $min_prices[] = $cur_min;
-            $max_prices[] = $cur_max;
         }
 
         return [ 
@@ -204,7 +208,7 @@ function cpp_ajax_get_chart_data() {
     
     $data = CPP_Core::get_chart_data($product_id);
     
-    // بررسی اینکه آیا واقعاً داده‌ای وجود دارد (حتی یک نقطه)
+    // اگر تمام آرایه‌ها خالی یا null باشند، خطا برگردان
     $has_any_data = false;
     foreach(['prices', 'min_prices', 'max_prices'] as $key) {
         if (!empty($data[$key]) && count(array_filter($data[$key], function($v){ return $v !== null; })) > 0) {
