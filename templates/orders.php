@@ -13,10 +13,11 @@ $search_term = isset($_GET['s']) ? sanitize_text_field(wp_unslash($_GET['s'])) :
 $where_clause = '';
 if (!empty($search_term)) {
     $like = '%' . $wpdb->esc_like($search_term) . '%';
-    // Search in new fields as well
     $where_clause = $wpdb->prepare( " WHERE product_name LIKE %s OR customer_name LIKE %s OR phone LIKE %s OR qty LIKE %s OR unit LIKE %s OR load_location LIKE %s OR note LIKE %s OR admin_note LIKE %s OR status LIKE %s OR id LIKE %s", $like, $like, $like, $like, $like, $like, $like, $like, $like, $like );
 }
-$orders = $wpdb->get_results("SELECT * FROM " . CPP_DB_ORDERS . $where_clause . " ORDER BY created DESC");
+
+// تغییر ORDER BY به ASC
+$orders = $wpdb->get_results("SELECT * FROM " . CPP_DB_ORDERS . $where_clause . " ORDER BY id ASC");
 ?>
 
 <div class="wrap">
@@ -66,10 +67,10 @@ $orders = $wpdb->get_results("SELECT * FROM " . CPP_DB_ORDERS . $where_clause . 
                     <td class="column-note" data-colname="<?php esc_attr_e('یادداشت مشتری', 'cpp-full'); ?>">
                         <?php
                         $full_note = esc_html($order->note);
-                        if (mb_strlen($full_note) > 40) { // Shorter truncation
+                        if (mb_strlen($full_note) > 40) { 
                             echo '<span title="' . esc_attr($full_note) . '">' . esc_html(mb_substr($full_note, 0, 40)) . '...</span>';
                         } else {
-                            echo nl2br($full_note); // Keep nl2br for shorter notes
+                            echo nl2br($full_note); 
                         }
                         ?>
                     </td>
@@ -79,14 +80,14 @@ $orders = $wpdb->get_results("SELECT * FROM " . CPP_DB_ORDERS . $where_clause . 
                      <td class="cpp-quick-edit column-admin_note" data-colname="<?php esc_attr_e('یادداشت مدیر', 'cpp-full'); ?>" data-id="<?php echo $order->id; ?>" data-field="admin_note" data-table-type="orders">
                         <?php
                         $full_admin_note = esc_html($order->admin_note);
-                        if (mb_strlen($full_admin_note) > 40) { // Shorter truncation
+                        if (mb_strlen($full_admin_note) > 40) { 
                             echo '<span title="' . esc_attr($full_admin_note) . '">' . esc_html(mb_substr($full_admin_note, 0, 40)) . '...</span>';
                         } else {
                             echo nl2br($full_admin_note);
                         }
                         ?>
                      </td>
-                    <td class="column-date" data-colname="<?php esc_attr_e('تاریخ ثبت', 'cpp-full'); ?>"><?php echo date_i18n('Y/m/d H:i', strtotime(get_date_from_gmt($order->created))); // Convert GMT to local time ?></td>
+                    <td class="column-date" data-colname="<?php esc_attr_e('تاریخ ثبت', 'cpp-full'); ?>"><?php echo date_i18n('Y/m/d H:i', strtotime(get_date_from_gmt($order->created))); ?></td>
                     <td class="column-actions" data-colname="<?php esc_attr_e('عملیات', 'cpp-full'); ?>">
                         <a href="<?php echo wp_nonce_url(admin_url('admin.php?page=custom-prices-orders&action=delete&id=' . $order->id), 'cpp_delete_order_' . $order->id); ?>" class="button button-link-delete" onclick="return confirm('<?php esc_attr_e('آیا مطمئنید؟', 'cpp-full'); ?>')"><?php _e('حذف', 'cpp-full'); ?></a>
                     </td>
