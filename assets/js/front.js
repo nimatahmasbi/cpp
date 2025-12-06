@@ -1,271 +1,219 @@
-jQuery(document).ready(function($) {
-    var frontChartInstance = null;
+/* --- Global Styles & Resets --- */
+.cpp-table-responsive-wrapper {
+    overflow-x: auto; 
+    -webkit-overflow-scrolling: touch; 
+    margin-bottom: 20px;
+    width: 100%;
+}
+body { font-family: sans-serif; } 
 
-    function refreshCaptcha() {
-        var captchaElement = $('.cpp-captcha-code');
-        var captchaInput = $('#captcha_input');
-        if (!captchaElement.length) return;
+/* --- استایل‌های عمومی لیست محصولات (شورت کد list) --- */
+.cpp-products-list-container table.cpp-products-table { 
+    width: 100%;
+    min-width: 600px; 
+    border-collapse: separate; 
+    border-spacing: 0;
+    text-align: right;
+    direction: rtl;
+    border: none; 
+    font-size: 0.9em;
+}
+.cpp-products-list-container table.cpp-products-table thead { display: none; } 
+.cpp-products-list-container table.cpp-products-table tfoot { display: none; }
+.cpp-products-list-container table.cpp-products-table tbody tr {
+    display: block; 
+    margin-bottom: 15px; 
+    background-color: #fff;
+    border: 1px solid #eee;
+    border-radius: 8px; 
+    padding: 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
+}
+.cpp-products-list-container table.cpp-products-table td {
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    padding: 8px 5px; 
+    border-bottom: 1px dashed #f0f0f0; 
+    text-align: left !important; 
+    white-space: normal; 
+}
+.cpp-products-list-container table.cpp-products-table td:last-child { border-bottom: none; }
 
-        captchaElement.text('...'); 
-        captchaInput.val(''); 
+.cpp-products-list-container table.cpp-products-table td::before {
+    content: attr(data-colname); 
+    font-weight: bold;
+    color: #555;
+    margin-left: 10px; 
+    text-align: right; 
+    white-space: nowrap; 
+}
 
-        $.post(cpp_front_vars.ajax_url, {
-            action: 'cpp_get_captcha', 
-            nonce: cpp_front_vars.nonce 
-        }, function(response) {
-            if (response.success && response.data && response.data.code) {
-                captchaElement.text(response.data.code); 
-            } else {
-                captchaElement.text('خطا');
-            }
-        }).fail(function(jqXHR) {
-            captchaElement.text('خطا');
-        });
+.cpp-products-list-container table.cpp-products-table .col-product-name {
+    flex-direction: row; 
+    justify-content: flex-start; 
+    font-size: 1.1em;
+    padding-top: 5px; padding-bottom: 10px;
+}
+.cpp-products-list-container table.cpp-products-table .col-product-name::before { display: none; } 
+.cpp-products-list-container table.cpp-products-table .cpp-product-info img {
+    width: 40px; height: 40px; border-radius: 4px;
+}
+.cpp-products-list-container table.cpp-products-table .col-actions {
+    justify-content: center; 
+    padding-top: 10px;
+}
+.cpp-products-list-container table.cpp-products-table .col-actions::before { display: none; } 
+
+@media (min-width: 768px) {
+    .cpp-products-list-container table.cpp-products-table {
+        border-collapse: collapse; 
+        border-spacing: 0;
+        border: none;
+        background: none; 
+        box-shadow: none;
+        border-radius: 0;
+         min-width: 700px;
     }
-
-    $(document).on('click', '.cpp-order-btn', function() {
-        var button = $(this); 
-        var productId = button.data('product-id');
-        var productName = button.data('product-name');
-        var productUnit = button.data('product-unit');
-        var productLocation = button.data('product-location');
-
-        var modal = $('#cpp-order-modal');
-        modal.find('#cpp-order-product-id').val(productId);
-        modal.find('.cpp-modal-product-name').text(productName);
-        modal.find('.cpp-modal-product-location').text(productLocation ? productLocation : ''); 
-        modal.find('.cpp-modal-product-unit').text(productUnit ? productUnit : ''); 
-
-        modal.find('.cpp-form-message').remove();
-        modal.find('form')[0].reset();
-        refreshCaptcha(); 
-        modal.show();
-    });
-
-    $(document).on('click', '.cpp-refresh-captcha', refreshCaptcha);
-
-    $('#cpp-order-form').on('submit', function(e) {
-        e.preventDefault();
-        var form = $(this);
-        var button = form.find('button[type="submit"]');
-        var formData = form.serialize(); 
-        var originalButtonText = button.text();
-
-        button.prop('disabled', true).text(cpp_front_vars.i18n.sending || 'در حال ارسال...'); 
-        form.find('.cpp-form-message').remove();
-
-        $.post(cpp_front_vars.ajax_url, formData + '&action=cpp_submit_order&nonce=' + cpp_front_vars.nonce, function(response) {
-            if (response.success && response.data && response.data.message) {
-                form.before('<div class="cpp-form-message cpp-success">' + response.data.message + '</div>');
-                setTimeout(function() {
-                    $('#cpp-order-modal').hide();
-                    button.prop('disabled', false).text(originalButtonText);
-                }, 3000); 
-            } else {
-                var errorMsg = (response.data && response.data.message) ? response.data.message : (cpp_front_vars.i18n.server_error || 'خطا.');
-                form.before('<div class="cpp-form-message cpp-error">' + errorMsg + '</div>');
-                button.prop('disabled', false).text(originalButtonText);
-                if (response.data && response.data.code === 'captcha_error') {
-                    refreshCaptcha();
-                }
-            }
-        }).fail(function(jqXHR, textStatus) {
-            form.before('<div class="cpp-form-message cpp-error">' + (cpp_front_vars.i18n.server_error || 'خطای سرور.') + '</div>');
-            button.prop('disabled', false).text(originalButtonText);
-            refreshCaptcha(); 
-        });
-    });
-
-    // --- مدیریت نمودار (اصلاح شده) ---
-     $(document).on('click', '.cpp-chart-btn', function() {
-        var productId = $(this).data('product-id');
-        
-        // اضافه کردن div برای پس‌زمینه در صورتی که نباشد
-        if ($('#cpp-front-chart-modal').length === 0) {
-             $('body').append('<div id="cpp-front-chart-modal" class="cpp-modal-overlay" style="display:none;"><div class="cpp-modal-container cpp-chart-container"><button class="cpp-modal-close">&times;</button><h3>نمودار تغییرات قیمت</h3><div class="cpp-chart-inner"><div class="cpp-chart-bg"></div><canvas id="cppFrontPriceChart"></canvas></div></div></div>');
-        }
-        var modal = $('#cpp-front-chart-modal');
-        var chartCanvas = modal.find('#cppFrontPriceChart');
-        var chartContainer = chartCanvas.parent(); 
-
-        // اعمال تصویر پس‌زمینه
-        if (cpp_front_vars.logo_url) {
-            modal.find('.cpp-chart-bg').css({
-                'background-image': 'url(' + cpp_front_vars.logo_url + ')',
-                'background-repeat': 'no-repeat',
-                'background-position': 'center center',
-                'background-size': '200px', // سایز لوگو
-                'opacity': '0.1' 
-            });
-        }
-
-        modal.css('display', 'flex'); // برای وسط‌چین شدن
-        chartContainer.find('.chart-error, .chart-loading').remove(); 
-        chartCanvas.show(); 
-
-        if (frontChartInstance) { frontChartInstance.destroy(); frontChartInstance = null; }
-        chartContainer.append('<p class="chart-loading" style="text-align:center;">' + cpp_front_vars.i18n.loading + '</p>');
-
-        $.get(cpp_front_vars.ajax_url, { action: 'cpp_get_chart_data', product_id: productId, nonce: cpp_front_vars.nonce }, function(response) { 
-            chartContainer.find('.chart-loading').remove(); 
-            if (response.success && response.data && response.data.labels && response.data.labels.length > 0) {
-                 renderFrontChart(response.data, chartCanvas[0]);
-             }
-            else {
-                 var errorMsg = (response.data && typeof response.data === 'string') ? response.data : 'تاریخچه قیمت برای این محصول در دسترس نیست.';
-                 chartCanvas.hide();
-                 chartContainer.prepend('<p class="chart-error" style="color:red; text-align:center;">'+errorMsg+'</p>');
-             }
-        }).fail(function(jqXHR, textStatus) {
-            chartContainer.find('.chart-loading').remove(); 
-            chartCanvas.hide();
-            chartContainer.prepend('<p class="chart-error" style="color:red; text-align:center;">خطا در بارگذاری داده‌های نمودار.</p>');
-        });
-    });
-
-    function renderFrontChart(chartData, ctx) {
-        var datasets = [];
-        
-        // 1. حداقل قیمت (هاشور آبی)
-        if (chartData.min_prices) {
-            datasets.push({ 
-                label: 'حداقل', 
-                data: chartData.min_prices, 
-                borderColor: 'rgba(54, 162, 235, 0.8)', 
-                borderDash: [5, 5], 
-                pointRadius: 0, 
-                fill: false 
-            });
-        }
-        
-        // 2. قیمت پایه (وسط)
-        if (chartData.prices) {
-            datasets.push({ 
-                label: 'قیمت پایه', 
-                data: chartData.prices, 
-                borderColor: 'rgb(75, 192, 192)', 
-                tension: 0.1, 
-                borderWidth: 3,
-                fill: {
-                    target: 0, // پر کردن تا حداقل (ایندکس 0)
-                    above: 'rgba(54, 162, 235, 0.15)' 
-                }
-            });
-        }
-        
-        // 3. حداکثر قیمت (هاشور قرمز)
-        if (chartData.max_prices) {
-            datasets.push({ 
-                label: 'حداکثر', 
-                data: chartData.max_prices, 
-                borderColor: 'rgba(255, 99, 132, 0.8)', 
-                borderDash: [5, 5], 
-                pointRadius: 0, 
-                fill: {
-                    target: 1, // پر کردن تا پایه (ایندکس 1)
-                    above: 'rgba(255, 99, 132, 0.15)' 
-                }
-            });
-        }
-
-        if(datasets.length === 0){
-             $(ctx).parent().prepend('<p class="chart-error" style="color:red; text-align:center;">داده‌ای وجود ندارد.</p>');
-             $(ctx).hide(); return;
-        }
-
-        try {
-            frontChartInstance = new Chart(ctx, {
-                type: 'line',
-                data: { labels: chartData.labels, datasets: datasets },
-                options: {
-                     responsive: true,
-                     maintainAspectRatio: false,
-                     spanGaps: true,
-                     plugins: {
-                          legend: { display: true, position: 'top' },
-                          tooltip: { mode: 'index', intersect: false },
-                          filler: { propagate: false }
-                      },
-                      scales: { y: { beginAtZero: false } }
-                }
-             });
-        } catch(e) { console.error("Error creating front chart:", e); }
+    .cpp-products-list-container table.cpp-products-table thead { display: table-header-group; } 
+    .cpp-products-list-container table.cpp-products-table tbody tr {
+        display: table-row; 
+        margin-bottom: 0;
+        background-color: transparent; 
+        border: none;
+        border-bottom: 1px solid #eee; 
+        border-radius: 0;
+        padding: 0;
+        box-shadow: none;
     }
+    .cpp-products-list-container table.cpp-products-table tbody tr:last-child { border-bottom: 1px solid #eee; } 
+    .cpp-products-list-container table.cpp-products-table tbody tr { border-bottom: none; }
+    .cpp-products-list-container table.cpp-products-table tbody tr:hover { background-color: #f1f1f1; }
+    .cpp-products-list-container table.cpp-products-table td {
+        display: table-cell; 
+        padding: 10px 12px;
+        border-bottom: 1px solid #eee; 
+        text-align: right !important; 
+        white-space: nowrap;
+         vertical-align: middle; 
+    }
+     .cpp-products-list-container table.cpp-products-table tbody tr:last-child td { border-bottom: none; } 
 
-    $(document).on('click', '.cpp-modal-close', function() {
-        var modal = $(this).closest('.cpp-modal-overlay');
-        modal.hide();
-         if (modal.is('#cpp-front-chart-modal') && frontChartInstance) {
-            frontChartInstance.destroy(); frontChartInstance = null;
-        }
-    });
-    $(document).on('click', '.cpp-modal-overlay', function(e) {
-        if ($(e.target).is('.cpp-modal-overlay')) {
-             var modal = $(this);
-             modal.hide();
-             if (modal.is('#cpp-front-chart-modal') && frontChartInstance) {
-                frontChartInstance.destroy(); frontChartInstance = null;
-            }
-        }
-    });
+     .cpp-products-list-container table.cpp-products-table th { background-color: #f8f8f8; font-weight: bold; white-space: nowrap; border-bottom: 1px solid #ddd;} 
+     .cpp-products-list-container table.cpp-products-table td::before { display: none; } 
+     .cpp-products-list-container table.cpp-products-table .col-actions { text-align: center !important; }
+     .cpp-products-list-container table.cpp-products-table .col-product-name { text-align: right !important; flex-direction: row; }
+     .cpp-products-list-container table.cpp-products-table td:first-child { white-space: normal; }
+}
 
-    $('.cpp-grid-view-filters .filter-btn').on('click', function(e){
-        e.preventDefault();
-        var $this = $(this);
-        var catId = $this.data('cat-id');
-        var wrapper = $this.closest('.cpp-grid-view-wrapper');
-        wrapper.find('.cpp-grid-view-filters .filter-btn').removeClass('active');
-        $this.addClass('active');
-        if (catId === 'all') {
-            wrapper.find('.cpp-grid-view-table .product-row').show();
-        } else {
-            wrapper.find('.cpp-grid-view-table .product-row').hide();
-            wrapper.find('.cpp-grid-view-table .product-row[data-cat-id="' + catId + '"]').show();
-        }
-        wrapper.find('.cpp-grid-view-footer').toggle(catId === 'all'); 
-    });
+/* --- دکمه‌ها --- */
+.cpp-icon-btn {
+    background: none; border: none; cursor: pointer; padding: 5px;
+    display: inline-block; vertical-align: middle; line-height: 1;
+}
+.cpp-icon-btn img {
+    width: 20px; height: 20px; 
+    opacity: 0.8; transition: opacity 0.2s; vertical-align: middle;
+}
+.cpp-icon-btn:hover img { opacity: 1; }
 
-    $(document).on('click', '.cpp-view-more-btn', function() {
-        var button = $(this);
-        var wrapper = button.closest('.cpp-grid-view-wrapper');
-        var currentPage = parseInt(button.data('page'), 10); 
-        var nextPage = currentPage + 1;
-        var shortcode_type = button.data('shortcode-type'); 
-        var original_text = cpp_front_vars.i18n.view_more;
+/* --- پاپ آپ (Modal) --- */
+.cpp-modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-color: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center;
+    z-index: 10001; direction: rtl; overflow-y: auto; padding: 15px; box-sizing: border-box;
+}
+.cpp-modal-container {
+    background-color: #fff; padding: 20px 25px; border-radius: 8px; width: 95%;
+    max-width: 600px; 
+    position: relative; box-shadow: 0 5px 20px rgba(0,0,0,0.3); margin: auto; text-align: right; box-sizing: border-box;
+}
+.cpp-chart-container { max-width: 90%; width: 800px; }
+.cpp-chart-inner { width: 100%; min-height: 300px; height: 50vh; position: relative; }
 
-        button.prop('disabled', true).text(cpp_front_vars.i18n.loading);
+/* استایل پس‌زمینه نمودار (واترمارک) */
+.cpp-chart-bg {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 0; pointer-events: none;
+}
+canvas#cppFrontPriceChart { position: relative; z-index: 1; }
 
-        $.post(cpp_front_vars.ajax_url, {
-            action: 'cpp_load_more_products',
-            nonce: cpp_front_vars.nonce,
-            page: nextPage, 
-            shortcode_type: shortcode_type
-        }, function(response) {
-            if (response.success && response.data && response.data.html) {
-                wrapper.find('.cpp-grid-view-table tbody').append(response.data.html);
-                button.data('page', nextPage); 
+.cpp-modal-close {
+    position: absolute; top: 8px; left: 8px; background: none; border: none; font-size: 26px;
+    cursor: pointer; color: #aaa; line-height: 1; padding: 5px;
+}
+.cpp-modal-close:hover { color: #333; }
+.cpp-modal-container h3 {
+    margin-top: 0; margin-bottom: 20px; color: #333; font-weight: 600; font-size: 1.2em;
+    line-height: 1.4; border-bottom: 1px solid #eee; padding-bottom: 10px;
+}
+.cpp-form-field { margin-bottom: 15px; }
+.cpp-form-field label { display: block; margin-bottom: 5px; font-weight: 500; font-size: 0.9em; color: #555; }
+.cpp-form-field input[type="text"],
+.cpp-form-field input[type="tel"],
+.cpp-form-field textarea {
+    width: 100%; padding: 10px 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;
+    font-size: 1em; background-color: #fdfdfd;
+}
+.cpp-form-field input[type="tel"].ltr,
+.cpp-form-field input#captcha_input.ltr { direction: ltr; text-align: left; }
+.cpp-form-field textarea { min-height: 60px; }
 
-                if (!response.data.has_more) {
-                    button.text(cpp_front_vars.i18n.no_more_products).prop('disabled', true);
-                     button.parent().hide(); 
-                } else {
-                    button.prop('disabled', false).text(original_text);
-                }
-            } else {
-                button.text(cpp_front_vars.i18n.no_more_products).prop('disabled', true);
-                 button.parent().hide(); 
-            }
-        }).fail(function(jqXHR, textStatus) {
-            alert(cpp_front_vars.i18n.server_error || 'خطای سرور.');
-            button.prop('disabled', false).text(original_text);
-        });
-    });
+.cpp-form-field button[type="submit"] {
+    width: 100%; padding: 12px; background-color: #28a745; color: white; border: none; border-radius: 4px; font-size: 1em;
+    cursor: pointer; transition: background-color 0.2s; font-weight: bold;
+}
+.cpp-form-field button[type="submit"]:hover { background-color: #218838; }
+.cpp-form-field button[type="submit"]:disabled { background-color: #aaa; cursor: not-allowed; }
+.cpp-form-field .required { color: #dc3545; margin-right: 2px; }
+.cpp-form-message-placeholder { min-height: 20px; margin-top: 15px; }
+.cpp-form-message { padding: 10px 15px; margin-bottom: 15px; border-radius: 4px; text-align: center; border: 1px solid transparent; font-size: 0.95em; }
+.cpp-success { background-color: #d4edda; color: #155724; border-color: #c3e6cb;}
+.cpp-error { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb;}
+.chart-error, .chart-loading { text-align: center; padding: 20px; color: #721c24; }
+.chart-loading { color: #555; }
 
-     cpp_front_vars.i18n = cpp_front_vars.i18n || {};
-     cpp_front_vars.i18n.sending = cpp_front_vars.i18n.sending || 'در حال ارسال...';
-     cpp_front_vars.i18n.server_error = cpp_front_vars.i18n.server_error || 'خطای سرور.';
-     cpp_front_vars.i18n.view_more = cpp_front_vars.i18n.view_more || 'مشاهده بیشتر';
-     cpp_front_vars.i18n.loading = cpp_front_vars.i18n.loading || 'بارگذاری...';
-     cpp_front_vars.i18n.no_more_products = cpp_front_vars.i18n.no_more_products || 'محصول دیگری نیست.';
+/* Captcha */
+.cpp-captcha-wrap { display: flex; align-items: stretch; gap: 8px; flex-wrap: nowrap; }
+.cpp-captcha-code {
+    background-color: #f0f0f0; padding: 0 10px; border-radius: 4px; font-weight: bold; font-size: 1.3em;
+    letter-spacing: 5px; font-family: monospace, sans-serif; border: 1px solid #ccc;
+    min-width: 90px; text-align: center; user-select: none;
+    line-height: calc(38px); flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+}
+.cpp-refresh-captcha {
+    background: #eee; border: 1px solid #ccc; font-size: 1.5em; 
+    cursor: pointer; color: #555; padding: 0 8px; line-height: 1; border-radius: 4px;
+    flex-shrink: 0; margin-right: auto; height: 38px;
+}
+.cpp-refresh-captcha:hover { color: #000; background-color: #e0e0e0; }
+#captcha_input {
+    width: 100px !important; flex-grow: 0; flex-shrink: 0; text-align: center; letter-spacing: 3px;
+    font-family: monospace, sans-serif; font-size: 1.2em;
+    padding: 8px 10px !important; height: 38px; box-sizing: border-box;
+}
 
-});
+.cpp-modal-product-name { font-weight: bold; }
+.cpp-modal-product-location::before { content: " \2013 "; font-weight: normal; font-size: 0.9em; color: #555;}
+.cpp-modal-product-location:empty::before { content: ""; }
+.cpp-modal-product-unit::before { content: " ("; font-weight: normal; font-size: 0.9em; color: #555; }
+.cpp-modal-product-unit::after { content: ")"; font-weight: normal; font-size: 0.9em; color: #555;}
+.cpp-modal-product-unit:empty::before, .cpp-modal-product-unit:empty::after { content: ""; }
+
+@media (max-width: 768px) {
+    .cpp-modal-container { padding: 15px 20px; }
+    .cpp-modal-container h3 { font-size: 1.1em; }
+    .cpp-form-field input[type="text"], .cpp-form-field input[type="tel"],
+    .cpp-form-field textarea, .cpp-form-field button[type="submit"] { font-size: 0.95em; padding: 8px 10px; }
+    .cpp-captcha-wrap { gap: 5px; }
+    .cpp-captcha-code { font-size: 1.1em; min-width: 70px; padding: 0 8px; line-height: 36px; }
+    .cpp-refresh-captcha { font-size: 1.3em; padding: 0 6px; height: 36px; }
+    #captcha_input { width: 80px !important; font-size: 1em; padding: 7px 8px !important; height: 36px; }
+    .cpp-chart-inner { min-height: 250px; height: 40vh; }
+}
+@media (max-width: 480px) {
+    .cpp-captcha-wrap { flex-wrap: wrap; }
+    .cpp-captcha-code { order: 1; flex-basis: calc(50% - 5px); min-width: 70px;} 
+    .cpp-refresh-captcha { order: 2; flex-basis: calc(50% - 5px); height: 36px; font-size: 1.2em; text-align: center;} 
+    #captcha_input { order: 3; width: 100% !important; margin-top: 8px; } 
+}
