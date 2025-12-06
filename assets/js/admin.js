@@ -97,8 +97,8 @@ jQuery(document).ready(function ($) {
             }
         }
 
-        var save_btn = $('<button>').addClass('button button-primary button-small').text('ذخیره');
-        var cancel_btn = $('<button>').addClass('button button-secondary button-small').text('لغو').css('margin-right', '5px');
+        var save_btn = $('<button>').addClass('button button-primary button-small').text(cpp_admin_vars.i18n.save || 'ذخیره');
+        var cancel_btn = $('<button>').addClass('button button-secondary button-small').text(cpp_admin_vars.i18n.cancel || 'لغو').css('margin-right', '5px');
         var buttons = $('<div>').addClass('cpp-quick-edit-buttons').css('margin-top', '5px').append(save_btn).append(cancel_btn);
 
         target_element.html('').append(input_element).append(buttons);
@@ -125,7 +125,7 @@ jQuery(document).ready(function ($) {
         var max_value = max_input.val();
         var original_html = td.data('original-content');
 
-        td.html('ذخیره...');
+        td.html(cpp_admin_vars.i18n.saving || 'در حال ذخیره...');
 
         var p1 = $.post(cpp_admin_vars.ajax_url, { action: 'cpp_quick_update', security: cpp_admin_vars.nonce, id: id, field: 'min_price', value: min_value, table_type: table_type });
         var p2 = $.post(cpp_admin_vars.ajax_url, { action: 'cpp_quick_update', security: cpp_admin_vars.nonce, id: id, field: 'max_price', value: max_value, table_type: table_type });
@@ -146,7 +146,7 @@ jQuery(document).ready(function ($) {
         var new_value = inputField.val();
         var original_html = cell.data('original-content');
 
-        cell.html('ذخیره...');
+        cell.html(cpp_admin_vars.i18n.saving || 'در حال ذخیره...');
         $.post(cpp_admin_vars.ajax_url, {
             action: 'cpp_quick_update', security: cpp_admin_vars.nonce, id: id, field: field, value: new_value, table_type: table_type
         }, function (response) {
@@ -195,7 +195,7 @@ jQuery(document).ready(function ($) {
         openEditModal(data);
     });
 
-    // 5. رسم نمودار
+    // 5. رسم نمودار (با تنظیمات رنگ‌بندی صحیح)
     var chartInstance = null;
     $(document).on('click', '.cpp-show-chart', function (e) {
         e.preventDefault();
@@ -206,14 +206,14 @@ jQuery(document).ready(function ($) {
         var modal = $('#cpp-chart-modal');
         var ctx = modal.find('#cppPriceChart');
         
-        // اعمال تصویر پس‌زمینه اگر موجود باشد
+        // اعمال تصویر پس‌زمینه (واترمارک)
         if (cpp_admin_vars.logo_url) {
             modal.find('.cpp-chart-bg').css({
                 'background-image': 'url(' + cpp_admin_vars.logo_url + ')',
                 'background-repeat': 'no-repeat',
                 'background-position': 'center center',
-                'background-size': '200px', // سایز واترمارک
-                'opacity': '0.1' // شفافیت لوگو
+                'background-size': '150px', 
+                'opacity': '0.1' 
             });
         }
 
@@ -223,14 +223,48 @@ jQuery(document).ready(function ($) {
         $.get(cpp_admin_vars.ajax_url, { action: 'cpp_get_chart_data', product_id: pid, security: cpp_admin_vars.nonce }).done(function (res) {
             if (res.success && res.data.labels) {
                  var ds = [];
+                 
+                 // ترتیب لایه‌ها: 0=حداقل، 1=پایه، 2=حداکثر
+                 // 1. خط حداقل (پایین‌ترین)
                  if (res.data.min_prices) {
-                     ds.push({ label: 'حداقل', data: res.data.min_prices, borderColor: 'rgba(54, 162, 235, 0.7)', backgroundColor: 'rgba(54, 162, 235, 0.2)', borderDash: [5,5], pointRadius: 0, fill: false });
+                     ds.push({ 
+                         label: 'حداقل', 
+                         data: res.data.min_prices, 
+                         borderColor: 'rgba(54, 162, 235, 0.8)', // آبی پررنگ
+                         borderDash: [5,5], 
+                         pointRadius: 0,
+                         fill: false // این خط چیزی را پر نمی‌کند
+                     });
                  }
+
+                 // 2. خط پایه (وسط) -> فاصله تا حداقل (0) را آبی می‌کند
                  if (res.data.prices) {
-                     ds.push({ label: 'قیمت پایه', data: res.data.prices, borderColor: 'rgb(75, 192, 192)', tension: 0.1, fill: { target: '-1', above: 'rgba(255, 255, 255, 0)', below: 'rgba(54, 162, 235, 0.2)' }, borderWidth: 3 });
+                     ds.push({ 
+                         label: 'قیمت پایه', 
+                         data: res.data.prices, 
+                         borderColor: 'rgb(75, 192, 192)', // سبزآبی
+                         tension: 0.1, 
+                         borderWidth: 3,
+                         fill: {
+                             target: 0, // پر کردن فاصله تا دیتاست شماره 0 (حداقل)
+                             above: 'rgba(54, 162, 235, 0.15)' // رنگ آبی کم‌رنگ
+                         }
+                     });
                  }
+
+                 // 3. خط حداکثر (بالا) -> فاصله تا پایه (1) را قرمز می‌کند
                  if (res.data.max_prices) {
-                     ds.push({ label: 'حداکثر', data: res.data.max_prices, borderColor: 'rgba(255, 99, 132, 0.7)', backgroundColor: 'rgba(255, 99, 132, 0.2)', borderDash: [5,5], pointRadius: 0, fill: { target: '-1', above: 'rgba(255, 99, 132, 0.2)', below: 'rgba(255, 255, 255, 0)' } });
+                     ds.push({ 
+                         label: 'حداکثر', 
+                         data: res.data.max_prices, 
+                         borderColor: 'rgba(255, 99, 132, 0.8)', // قرمز پررنگ
+                         borderDash: [5,5], 
+                         pointRadius: 0,
+                         fill: {
+                             target: 1, // پر کردن فاصله تا دیتاست شماره 1 (پایه)
+                             above: 'rgba(255, 99, 132, 0.15)' // رنگ قرمز کم‌رنگ
+                         }
+                     });
                  }
                  
                  chartInstance = new Chart(ctx, { 
@@ -238,8 +272,15 @@ jQuery(document).ready(function ($) {
                      data: { labels: res.data.labels, datasets: ds }, 
                      options: { 
                          responsive: true, 
+                         maintainAspectRatio: false,
                          spanGaps: true,
-                         plugins: { filler: { propagate: false } },
+                         plugins: {
+                             filler: { propagate: false } // جلوگیری از تداخل رنگ‌ها
+                         },
+                         interaction: {
+                             mode: 'index',
+                             intersect: false,
+                         },
                          scales: { y: { beginAtZero: false } }
                      } 
                  });
@@ -247,7 +288,7 @@ jQuery(document).ready(function ($) {
         }).fail(function () { alert('خطای دریافت داده'); modal.hide(); });
     });
 
-    // 6. ارسال فرم‌های ویرایش (داخل مدال)
+    // 6. ارسال فرم‌های ویرایش
     $(document).on('submit', '#cpp-edit-product-form, #cpp-edit-category-form', function (e) {
         e.preventDefault();
         var form = $(this);
