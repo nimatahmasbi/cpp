@@ -8,7 +8,7 @@ class CPP_Core {
             try {
                  @session_start();
             } catch (Exception $e) {
-                 error_log('CPP Error starting session: ' . $e->getMessage());
+                 error_log('CPP Error: ' . $e->getMessage());
             }
         }
     }
@@ -42,6 +42,7 @@ class CPP_Core {
         dbDelta($sql3);
         dbDelta($sql4);
 
+        // آپدیت جداول قدیمی
         $table_name_history = CPP_DB_PRICE_HISTORY;
         if($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_name_history)) == $table_name_history) {
             $history_columns = $wpdb->get_col("DESC `{$table_name_history}`");
@@ -56,27 +57,26 @@ class CPP_Core {
          }
     }
 
+    // ثبت تاریخچه کامل
     public static function save_price_history($product_id, $new_value, $field_name = 'price') {
          global $wpdb;
          $product_id = intval($product_id);
          if (!$product_id) return false;
          
-         $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
-         if (!$current_product) return false;
+         $current = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
+         if (!$current) return false;
 
-         $price_to_save = ($field_name === 'price') ? $new_value : $current_product->price;
-         $min_to_save   = ($field_name === 'min_price') ? $new_value : $current_product->min_price;
-         $max_to_save   = ($field_name === 'max_price') ? $new_value : $current_product->max_price;
+         $p = ($field_name === 'price') ? $new_value : $current->price;
+         $min = ($field_name === 'min_price') ? $new_value : $current->min_price;
+         $max = ($field_name === 'max_price') ? $new_value : $current->max_price;
 
-         $data_to_insert = [
+         $inserted = $wpdb->insert(CPP_DB_PRICE_HISTORY, [
              'product_id' => $product_id,
              'change_time' => current_time('mysql', 1), 
-             'price' => sanitize_text_field($price_to_save), 
-             'min_price' => sanitize_text_field($min_to_save), 
-             'max_price' => sanitize_text_field($max_to_save),
-         ];
-         
-         $inserted = $wpdb->insert(CPP_DB_PRICE_HISTORY, $data_to_insert);
+             'price' => sanitize_text_field($p), 
+             'min_price' => sanitize_text_field($min), 
+             'max_price' => sanitize_text_field($max),
+         ]);
          
          if ($inserted) {
               $wpdb->update(CPP_DB_PRODUCTS, ['last_updated_at' => current_time('mysql', 1)], ['id' => $product_id]);
@@ -96,31 +96,26 @@ class CPP_Core {
         return ($value === '') ? null : (float)$value;
     }
 
-    public static function get_chart_data($product_id, $months = 6) {
+    public static function get_chart_data($product_id, $months = 12) { // پیش‌فرض ۱۲ ماه
         global $wpdb;
 
         $product_id = intval($product_id);
-        $months = intval($months);
         
         $labels = []; $prices = []; $min_prices = []; $max_prices = [];
 
-        $date_limit = date('Y-m-d H:i:s', strtotime("-{$months} months", current_time('timestamp', 1)));
+        // دریافت تمام تاریخچه (فیلتر زمانی را به سمت کلاینت می‌سپاریم یا بازه بزرگتری می‌گیریم)
+        $history = $wpdb->get_results($wpdb->prepare("SELECT price, min_price, max_price, change_time FROM " . CPP_DB_PRICE_HISTORY . " WHERE product_id = %d ORDER BY change_time ASC", $product_id));
 
-         $history = $wpdb->get_results($wpdb->prepare("
-            SELECT price, min_price, max_price, change_time
-            FROM " . CPP_DB_PRICE_HISTORY . "
-            WHERE product_id = %d AND change_time >= %s
-            ORDER BY change_time ASC
-        ", $product_id, $date_limit));
-
-        if (empty($history)) {
-            $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
-            if ($current_product) {
+        // اضافه کردن وضعیت فعلی به عنوان آخرین نقطه
+        $current = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
+        if ($current) {
+            $last_time = !empty($history) ? end($history)->change_time : '';
+            if (empty($history) || $current->last_updated_at > $last_time) {
                 $dummy = new stdClass();
-                $dummy->change_time = $current_product->last_updated_at ? $current_product->last_updated_at : current_time('mysql', 1);
-                $dummy->price = $current_product->price;
-                $dummy->min_price = $current_product->min_price;
-                $dummy->max_price = $current_product->max_price;
+                $dummy->change_time = $current->last_updated_at ? $current->last_updated_at : current_time('mysql', 1);
+                $dummy->price = $current->price;
+                $dummy->min_price = $current->min_price;
+                $dummy->max_price = $current->max_price;
                 $history[] = $dummy;
             }
         }
@@ -136,16 +131,12 @@ class CPP_Core {
             $p_min  = self::clean_price_value($row->min_price);
             $p_max  = self::clean_price_value($row->max_price);
 
+            // محاسبه میانگین اگر قیمت پایه غیرفعال است
             if ($disable_base_price) {
-                if ($p_min !== null && $p_max !== null) {
-                    $prices[] = ($p_min + $p_max) / 2;
-                } elseif ($p_min !== null) {
-                    $prices[] = $p_min;
-                } elseif ($p_max !== null) {
-                    $prices[] = $p_max;
-                } else {
-                    $prices[] = null;
-                }
+                if ($p_min !== null && $p_max !== null) $prices[] = ($p_min + $p_max) / 2;
+                elseif ($p_min !== null) $prices[] = $p_min;
+                elseif ($p_max !== null) $prices[] = $p_max;
+                else $prices[] = null;
             } else {
                 $prices[] = $p_base;
             }
@@ -157,14 +148,12 @@ class CPP_Core {
         return [ 'labels' => $labels, 'prices' => $prices, 'min_prices' => $min_prices, 'max_prices' => $max_prices ];
     }
     
-    // اصلاح ترتیب: صعودی بر اساس ID
     public static function get_all_categories() {
         global $wpdb;
         if($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", CPP_DB_CATEGORIES)) != CPP_DB_CATEGORIES) return [];
         return $wpdb->get_results("SELECT id, name, slug, image_url, created FROM " . CPP_DB_CATEGORIES . " ORDER BY id ASC");
     }
     
-    // اصلاح ترتیب: صعودی بر اساس ID
     public static function get_all_orders() {
         global $wpdb;
         if($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", CPP_DB_ORDERS)) != CPP_DB_ORDERS) return [];
@@ -222,7 +211,6 @@ add_action('wp_ajax_nopriv_cpp_submit_order', 'cpp_submit_order');
 function cpp_submit_order() {
     check_ajax_referer('cpp_front_nonce','nonce');
     global $wpdb;
-
     CPP_Core::init_session();
     $user_captcha = isset($_POST['captcha_input']) ? trim(sanitize_text_field($_POST['captcha_input'])) : '';
     $session_captcha = isset($_SESSION['cpp_captcha_code']) ? $_SESSION['cpp_captcha_code'] : '';
@@ -232,79 +220,52 @@ function cpp_submit_order() {
         wp_send_json_error(['message' => __('کد امنیتی صحیح نیست.', 'cpp-full'), 'code' => 'captcha_error'], 400);
         wp_die();
     }
-
     $product_id = isset($_POST['product_id']) ? intval($_POST['product_id']) : 0;
-    $product = $wpdb->get_row($wpdb->prepare("SELECT name, unit, load_location FROM " . CPP_DB_PRODUCTS . " WHERE id=%d AND is_active = 1", $product_id));
-    
-    if (!$product) {
-        wp_send_json_error(['message' => __('محصول یافت نشد.', 'cpp-full')], 404);
-        wp_die();
-    }
+    $product = $wpdb->get_row($wpdb->prepare("SELECT name, unit, load_location FROM " . CPP_DB_PRODUCTS . " WHERE id=%d", $product_id));
+    if (!$product) { wp_send_json_error(['message' => 'محصول یافت نشد.'], 404); wp_die(); }
 
-    $customer_name = isset($_POST['customer_name']) ? sanitize_text_field(wp_unslash($_POST['customer_name'])) : '';
-    $phone = isset($_POST['phone']) ? sanitize_text_field(wp_unslash($_POST['phone'])) : '';
-    $qty = isset($_POST['qty']) ? sanitize_text_field(wp_unslash($_POST['qty'])) : '';
-    $note = isset($_POST['note']) ? sanitize_textarea_field(wp_unslash($_POST['note'])) : '';
+    $customer_name = sanitize_text_field($_POST['customer_name']);
+    $phone = sanitize_text_field($_POST['phone']);
+    $qty = sanitize_text_field($_POST['qty']);
+    $note = sanitize_textarea_field($_POST['note']);
 
     if(empty($customer_name) || empty($phone) || empty($qty)){
-        wp_send_json_error(['message' => __('لطفا فیلدهای ستاره‌دار را پر کنید.', 'cpp-full')], 400);
+        wp_send_json_error(['message' => 'فیلدهای الزامی را پر کنید.'], 400);
         wp_die();
     }
 
-    $order_data = [
-        'product_id'    => $product_id,
-        'product_name'  => $product->name,
+    $inserted = $wpdb->insert(CPP_DB_ORDERS, [
+        'product_id' => $product_id,
+        'product_name' => $product->name,
         'customer_name' => $customer_name,
-        'phone'         => $phone,
-        'qty'           => $qty,
-        'unit'          => $product->unit,
+        'phone' => $phone,
+        'qty' => $qty,
+        'unit' => $product->unit,
         'load_location' => $product->load_location,
-        'note'          => $note,
-        'status'        => 'new_order',
-        'created'       => current_time('mysql', 1) 
-    ];
-    $order_formats = ['%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s'];
+        'note' => $note,
+        'status' => 'new_order',
+        'created' => current_time('mysql', 1)
+    ]);
 
-    $inserted = $wpdb->insert(CPP_DB_ORDERS, $order_data, $order_formats);
+    if (!$inserted) { wp_send_json_error(['message' => 'خطا در ثبت.'], 500); wp_die(); }
 
-    if (!$inserted) {
-         wp_send_json_error(['message' => __('خطا در ثبت سفارش.', 'cpp-full')], 500);
-         wp_die();
-    }
-
-    $admin_placeholders = [
-        '{product_name}'  => $product->name,
-        '{customer_name}' => $customer_name,
-        '{phone}'         => $phone,
-        '{qty}'           => $qty,
-        '{unit}'          => $product->unit ?? '',
-        '{load_location}' => $product->load_location ?? '',
-        '{note}'          => $note,
-    ];
-
-    if (get_option('cpp_enable_email') && class_exists('CPP_Full_Email')) {
-        CPP_Full_Email::send_notification($admin_placeholders);
-    }
-
+    // ارسال اعلان‌ها (ایمیل و پیامک)
+    $placeholders = ['{product_name}' => $product->name, '{customer_name}' => $customer_name, '{phone}' => $phone, '{qty}' => $qty, '{unit}' => $product->unit, '{load_location}' => $product->load_location, '{note}' => $note];
+    if (get_option('cpp_enable_email') && class_exists('CPP_Full_Email')) CPP_Full_Email::send_notification($placeholders);
     if (get_option('cpp_sms_service') === 'ippanel' && class_exists('CPP_Full_SMS')) {
-        CPP_Full_SMS::send_notification($admin_placeholders); 
+        CPP_Full_SMS::send_notification($placeholders);
         if (get_option('cpp_sms_customer_enable')) {
-            $customer_pattern_code = get_option('cpp_sms_customer_pattern_code');
-            $api_key = get_option('cpp_sms_api_key');
+            $p_code = get_option('cpp_sms_customer_pattern_code');
+            $api = get_option('cpp_sms_api_key');
             $sender = get_option('cpp_sms_sender');
-            if ($customer_pattern_code && $api_key && $sender) {
-                $customer_variables_needed = ['customer_name', 'product_name', 'unit', 'load_location', 'qty'];
-                $customer_variables = [];
-                foreach($customer_variables_needed as $var_name) {
-                    $placeholder_key = '{' . $var_name . '}';
-                    $customer_variables[$var_name] = isset($admin_placeholders[$placeholder_key]) ? $admin_placeholders[$placeholder_key] : '';
-                }
-                 CPP_Full_SMS::ippanel_send_pattern($api_key, $sender, $phone, $customer_pattern_code, $customer_variables);
+            if ($p_code && $api && $sender) {
+                $vars = []; foreach(['customer_name','product_name','unit','load_location','qty'] as $k) $vars[$k] = isset($placeholders['{'.$k.'}']) ? $placeholders['{'.$k.'}'] : '';
+                CPP_Full_SMS::ippanel_send_pattern($api, $sender, $phone, $p_code, $vars);
             }
         }
     }
 
-    wp_send_json_success(['message' => __('درخواست شما ثبت شد.', 'cpp-full')]);
+    wp_send_json_success(['message' => 'درخواست ثبت شد.']);
     wp_die();
 }
 ?>
