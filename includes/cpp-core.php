@@ -56,17 +56,33 @@ class CPP_Core {
          }
     }
 
+    /**
+     * ثبت تاریخچه قیمت (اصلاح شده: ثبت کامل همه قیمت‌ها در هر تغییر)
+     */
     public static function save_price_history($product_id, $new_value, $field_name = 'price') {
          global $wpdb;
          $product_id = intval($product_id);
          if (!$product_id) return false;
          
+         // 1. دریافت مقادیر فعلی محصول از دیتابیس (برای پر کردن جاهای خالی)
+         $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
+         
+         if (!$current_product) return false;
+
+         // 2. آماده‌سازی داده‌ها برای ثبت
+         // اگر فیلدی در حال تغییر است، از مقدار جدید ($new_value) استفاده کن
+         // اگر نه، از مقدار فعلی دیتابیس استفاده کن تا تاریخچه ناقص نشود
+         $price_to_save = ($field_name === 'price') ? $new_value : $current_product->price;
+         $min_to_save   = ($field_name === 'min_price') ? $new_value : $current_product->min_price;
+         $max_to_save   = ($field_name === 'max_price') ? $new_value : $current_product->max_price;
+
          $data_to_insert = [
-             'product_id' => $product_id,
+             'product_id'  => $product_id,
              'change_time' => current_time('mysql', 1), 
-             'price' => null, 'min_price' => null, 'max_price' => null,
+             'price'       => sanitize_text_field($price_to_save), 
+             'min_price'   => sanitize_text_field($min_to_save), 
+             'max_price'   => sanitize_text_field($max_to_save),
          ];
-         $data_to_insert[$field_name] = sanitize_text_field($new_value);
          
          $inserted = $wpdb->insert(CPP_DB_PRICE_HISTORY, $data_to_insert);
          
@@ -77,23 +93,14 @@ class CPP_Core {
           return false;
      }
 
-    /**
-     * تابع کمکی برای تمیزکردن اعداد (تبدیل فارسی به انگلیسی و حذف کاما)
-     */
     private static function clean_price_value($value) {
         if ($value === null || $value === '') return null;
-        
-        // تبدیل اعداد فارسی و عربی به انگلیسی
         $persian = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
         $arabic  = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
         $english = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-        
         $value = str_replace($persian, $english, $value);
         $value = str_replace($arabic, $english, $value);
-        
-        // حذف هر چیزی غیر از عدد و نقطه (مثل کاما، فاصله، حروف)
-        $value = preg_replace('/[^0-9.]/', '', $value);
-        
+        $value = preg_replace('/[^0-9.]/', '', $value); // فقط اعداد و نقطه باقی بمانند
         return ($value === '') ? null : (float)$value;
     }
 
@@ -117,7 +124,6 @@ class CPP_Core {
             ORDER BY change_time ASC
         ", $product_id, $date_limit));
 
-        // اگر تاریخچه خالی بود، از اطلاعات فعلی استفاده کن
         if (empty($history)) {
             $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
             if ($current_product) {
@@ -137,7 +143,6 @@ class CPP_Core {
             if (!$ts) $ts = current_time('timestamp');
             $labels[] = date_i18n('Y/m/d H:i', $ts);
 
-            // استفاده از تابع تمیزکننده جدید برای خواندن صحیح اعداد فارسی
             $p_base = self::clean_price_value($row->price);
             $p_min  = self::clean_price_value($row->min_price);
             $p_max  = self::clean_price_value($row->max_price);
@@ -200,7 +205,6 @@ function cpp_ajax_get_chart_data() {
     
     $data = CPP_Core::get_chart_data($product_id);
     
-    // بررسی اینکه آیا واقعاً داده‌ای وجود دارد (حتی یک نقطه)
     $has_any_data = false;
     foreach(['prices', 'min_prices', 'max_prices'] as $key) {
         if (!empty($data[$key]) && count(array_filter($data[$key], function($v){ return $v !== null; })) > 0) {
@@ -271,6 +275,8 @@ function cpp_submit_order() {
          wp_send_json_error(['message' => __('خطا در ثبت سفارش.', 'cpp-full')], 500);
          wp_die();
     }
+
+    $order_id = $wpdb->insert_id;
 
     $admin_placeholders = [
         '{product_name}'  => $product->name,
