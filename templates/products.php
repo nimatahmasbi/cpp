@@ -3,7 +3,8 @@ if (!defined('ABSPATH')) exit;
 global $wpdb;
 
 $categories = CPP_Core::get_all_categories(); 
-$products = $wpdb->get_results("SELECT p.*, c.name as category_name FROM " . CPP_DB_PRODUCTS . " p LEFT JOIN " . CPP_DB_CATEGORIES . " c ON p.cat_id = c.id ORDER BY p.id DESC");
+// تغییر ORDER BY به ASC
+$products = $wpdb->get_results("SELECT p.*, c.name as category_name FROM " . CPP_DB_PRODUCTS . " p LEFT JOIN " . CPP_DB_CATEGORIES . " c ON p.cat_id = c.id ORDER BY p.id ASC");
 $status_options = [ '1' => __('فعال', 'cpp-full'), '0' => __('غیرفعال', 'cpp-full'), ];
 $default_image_url = CPP_ASSETS_URL . 'images/default-product.png';
 $site_icon = get_site_icon_url(100);
@@ -123,7 +124,6 @@ $disable_base_price = get_option('cpp_disable_base_price', 0);
         <?php if ($products) : foreach ($products as $product) : 
             $img_src = esc_url($product->image_url) ? esc_url($product->image_url) : $default_image_url;
             
-            // بررسی برابر بودن قیمت‌ها برای نمایش در جدول
             $min_clean = str_replace(',', '', $product->min_price);
             $max_clean = str_replace(',', '', $product->max_price);
             $show_single_price = ($min_clean == $max_clean && is_numeric($min_clean));
