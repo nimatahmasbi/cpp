@@ -14,7 +14,7 @@ class CPP_Core {
     }
 
     /**
-     * بررسی دسترسی کاربر فعلی (پشتیبانی از چند نقش)
+     * بررسی دسترسی کاربر (پشتیبانی از چند نقش)
      */
     public static function has_access() {
         $allowed_roles = get_option('cpp_admin_capability');
@@ -115,7 +115,7 @@ class CPP_Core {
             ORDER BY change_time ASC
         ", $product_id, $date_limit));
 
-        // اگر تاریخچه خالی بود، قیمت فعلی را نشان بده
+        // --- اگر تاریخچه خالی بود، قیمت فعلی را نشان بده ---
         if (empty($history)) {
             $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
             if ($current_product) {
@@ -147,9 +147,9 @@ class CPP_Core {
                  
                  $labels[] = date_i18n('Y/m/d H:i', $local_timestamp);
                  
-                 if ($row->price !== null) $last_price = (float)str_replace(',', '', $row->price);
-                 if ($row->min_price !== null) $last_min = (float)str_replace(',', '', $row->min_price);
-                 if ($row->max_price !== null) $last_max = (float)str_replace(',', '', $row->max_price);
+                 if ($row->price !== null && $row->price !== '') $last_price = (float)str_replace(',', '', $row->price);
+                 if ($row->min_price !== null && $row->min_price !== '') $last_min = (float)str_replace(',', '', $row->min_price);
+                 if ($row->max_price !== null && $row->max_price !== '') $last_max = (float)str_replace(',', '', $row->max_price);
                  
                  $prices[] = (!$disable_base_price) ? $last_price : null;
                  $min_prices[] = $last_min;
