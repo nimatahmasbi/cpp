@@ -13,6 +13,31 @@ class CPP_Core {
         }
     }
 
+    /**
+     * بررسی دسترسی کاربر فعلی (پشتیبانی از چند نقش)
+     */
+    public static function has_access() {
+        $allowed_roles = get_option('cpp_admin_capability');
+
+        if (empty($allowed_roles)) {
+            $allowed_roles = ['administrator'];
+        } elseif (is_string($allowed_roles)) {
+            $allowed_roles = ['administrator']; 
+        }
+
+        $current_user = wp_get_current_user();
+        if (empty($current_user) || empty($current_user->roles)) {
+            return false;
+        }
+
+        foreach ($current_user->roles as $user_role) {
+            if (in_array($user_role, $allowed_roles)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static function create_db_tables() {
         global $wpdb;
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
@@ -28,6 +53,7 @@ class CPP_Core {
         dbDelta($sql3);
         dbDelta($sql4);
 
+        // آپدیت ساختار جداول
         $table_name_history = CPP_DB_PRICE_HISTORY;
         if($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_name_history)) == $table_name_history) {
             $history_columns = $wpdb->get_col("DESC `{$table_name_history}`");
@@ -89,12 +115,17 @@ class CPP_Core {
             ORDER BY change_time ASC
         ", $product_id, $date_limit));
 
-        // --- اصلاح: اگر تاریخچه خالی بود، قیمت فعلی را اضافه کن ---
+        // اگر تاریخچه خالی بود، قیمت فعلی را نشان بده
         if (empty($history)) {
             $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
             if ($current_product) {
                 $dummy_row = new stdClass();
                 $dummy_row->change_time = $current_product->last_updated_at;
+                
+                if (empty($dummy_row->change_time) || substr($dummy_row->change_time, 0, 4) == '0000') {
+                    $dummy_row->change_time = current_time('mysql', 1);
+                }
+
                 $dummy_row->price = ($current_product->price !== '') ? $current_product->price : null;
                 $dummy_row->min_price = ($current_product->min_price !== '') ? $current_product->min_price : null;
                 $dummy_row->max_price = ($current_product->max_price !== '') ? $current_product->max_price : null;
@@ -112,6 +143,8 @@ class CPP_Core {
              
              foreach ($history as $row) {
                  $local_timestamp = strtotime(get_date_from_gmt($row->change_time));
+                 if (!$local_timestamp) $local_timestamp = current_time('timestamp');
+                 
                  $labels[] = date_i18n('Y/m/d H:i', $local_timestamp);
                  
                  if ($row->price !== null) $last_price = (float)str_replace(',', '', $row->price);
@@ -141,6 +174,7 @@ class CPP_Core {
 
 add_action('init', ['CPP_Core', 'init_session'], 1);
 
+// توابع AJAX
 add_action('wp_ajax_cpp_get_captcha', 'cpp_ajax_get_captcha');
 add_action('wp_ajax_nopriv_cpp_get_captcha', 'cpp_ajax_get_captcha');
 function cpp_ajax_get_captcha() {
@@ -155,7 +189,6 @@ function cpp_ajax_get_captcha() {
 add_action('wp_ajax_cpp_get_chart_data', 'cpp_ajax_get_chart_data');
 add_action('wp_ajax_nopriv_cpp_get_chart_data', 'cpp_ajax_get_chart_data');
 function cpp_ajax_get_chart_data() {
-    // اصلاح: بررسی امنیت دوگانه (ادمین و فرانت)
     $is_valid_nonce = false;
     if (isset($_REQUEST['security']) && wp_verify_nonce($_REQUEST['security'], 'cpp_admin_nonce')) {
         $is_valid_nonce = true;
