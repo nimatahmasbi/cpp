@@ -97,8 +97,8 @@ jQuery(document).ready(function ($) {
             }
         }
 
-        var save_btn = $('<button>').addClass('button button-primary button-small').text(cpp_admin_vars.i18n.save || 'ذخیره');
-        var cancel_btn = $('<button>').addClass('button button-secondary button-small').text(cpp_admin_vars.i18n.cancel || 'لغو').css('margin-right', '5px');
+        var save_btn = $('<button>').addClass('button button-primary button-small').text('ذخیره');
+        var cancel_btn = $('<button>').addClass('button button-secondary button-small').text('لغو').css('margin-right', '5px');
         var buttons = $('<div>').addClass('cpp-quick-edit-buttons').css('margin-top', '5px').append(save_btn).append(cancel_btn);
 
         target_element.html('').append(input_element).append(buttons);
@@ -125,7 +125,7 @@ jQuery(document).ready(function ($) {
         var max_value = max_input.val();
         var original_html = td.data('original-content');
 
-        td.html(cpp_admin_vars.i18n.saving || 'در حال ذخیره...');
+        td.html('ذخیره...');
 
         var p1 = $.post(cpp_admin_vars.ajax_url, { action: 'cpp_quick_update', security: cpp_admin_vars.nonce, id: id, field: 'min_price', value: min_value, table_type: table_type });
         var p2 = $.post(cpp_admin_vars.ajax_url, { action: 'cpp_quick_update', security: cpp_admin_vars.nonce, id: id, field: 'max_price', value: max_value, table_type: table_type });
@@ -146,7 +146,7 @@ jQuery(document).ready(function ($) {
         var new_value = inputField.val();
         var original_html = cell.data('original-content');
 
-        cell.html(cpp_admin_vars.i18n.saving || 'در حال ذخیره...');
+        cell.html('ذخیره...');
         $.post(cpp_admin_vars.ajax_url, {
             action: 'cpp_quick_update', security: cpp_admin_vars.nonce, id: id, field: field, value: new_value, table_type: table_type
         }, function (response) {
@@ -163,7 +163,7 @@ jQuery(document).ready(function ($) {
         }).fail(function () { cell.removeClass('editing'); alert('خطای سرور'); cell.html(original_html); });
     }
 
-    // 4. پاپ‌آپ‌ها (ویرایش محصول و دسته‌بندی)
+    // 4. پاپ‌آپ‌ها
     function openEditModal(ajax_data) {
         if ($('#cpp-edit-modal').length === 0) $('body').append('<div id="cpp-edit-modal" class="cpp-modal-overlay" style="display: none;"><div class="cpp-modal-container"><span class="cpp-close-modal">×</span><div class="cpp-edit-modal-content"></div></div></div>');
         var modal = $('#cpp-edit-modal');
@@ -195,67 +195,42 @@ jQuery(document).ready(function ($) {
         openEditModal(data);
     });
 
-    // 5. رسم نمودار (با هاشور قرمز در بالا و آبی در پایین)
+    // 5. رسم نمودار
     var chartInstance = null;
     $(document).on('click', '.cpp-show-chart', function (e) {
         e.preventDefault();
         var pid = $(this).data('product-id');
-        if ($('#cpp-chart-modal').length === 0) $('body').append('<div id="cpp-chart-modal" class="cpp-modal-overlay" style="display:none;"><div class="cpp-modal-container"><span class="cpp-close-modal">×</span><h2>نمودار قیمت</h2><div class="cpp-chart-modal-content"><canvas id="cppPriceChart"></canvas></div></div></div>');
+        // افزودن div برای پس‌زمینه لوگو
+        if ($('#cpp-chart-modal').length === 0) $('body').append('<div id="cpp-chart-modal" class="cpp-modal-overlay" style="display:none;"><div class="cpp-modal-container"><span class="cpp-close-modal">×</span><h2>نمودار قیمت</h2><div class="cpp-chart-modal-content"><div class="cpp-chart-bg"></div><canvas id="cppPriceChart"></canvas></div></div></div>');
         
         var modal = $('#cpp-chart-modal');
         var ctx = modal.find('#cppPriceChart');
-        modal.css('display', 'flex');
         
+        // اعمال تصویر پس‌زمینه اگر موجود باشد
+        if (cpp_admin_vars.logo_url) {
+            modal.find('.cpp-chart-bg').css({
+                'background-image': 'url(' + cpp_admin_vars.logo_url + ')',
+                'background-repeat': 'no-repeat',
+                'background-position': 'center center',
+                'background-size': '200px', // سایز واترمارک
+                'opacity': '0.1' // شفافیت لوگو
+            });
+        }
+
+        modal.css('display', 'flex');
         if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
         
         $.get(cpp_admin_vars.ajax_url, { action: 'cpp_get_chart_data', product_id: pid, security: cpp_admin_vars.nonce }).done(function (res) {
             if (res.success && res.data.labels) {
                  var ds = [];
-
-                 // 1. حداقل قیمت (هاشور آبی به سمت بالا تا قیمت پایه)
                  if (res.data.min_prices) {
-                     ds.push({ 
-                         label: 'حداقل', 
-                         data: res.data.min_prices, 
-                         borderColor: 'rgba(54, 162, 235, 0.7)', // آبی
-                         backgroundColor: 'rgba(54, 162, 235, 0.2)', // رنگ پس‌زمینه آبی
-                         borderDash: [5,5], 
-                         pointRadius: 0,
-                         fill: false // پر نکردن خودکار، چون با قیمت پایه پر می‌شود
-                     });
+                     ds.push({ label: 'حداقل', data: res.data.min_prices, borderColor: 'rgba(54, 162, 235, 0.7)', backgroundColor: 'rgba(54, 162, 235, 0.2)', borderDash: [5,5], pointRadius: 0, fill: false });
                  }
-
-                 // 2. قیمت پایه (خط اصلی وسط)
                  if (res.data.prices) {
-                     ds.push({ 
-                         label: 'قیمت پایه', 
-                         data: res.data.prices, 
-                         borderColor: 'rgb(75, 192, 192)', // سبزآبی
-                         tension: 0.1, 
-                         fill: {
-                             target: '-1', // پر کردن فاصله تا دیتاست قبلی (حداقل قیمت)
-                             above: 'rgba(255, 255, 255, 0)', // بالای قیمت پایه خالی
-                             below: 'rgba(54, 162, 235, 0.2)'  // پایین قیمت پایه (تا حداقل) آبی کمرنگ
-                         },
-                         borderWidth: 3
-                     });
+                     ds.push({ label: 'قیمت پایه', data: res.data.prices, borderColor: 'rgb(75, 192, 192)', tension: 0.1, fill: { target: '-1', above: 'rgba(255, 255, 255, 0)', below: 'rgba(54, 162, 235, 0.2)' }, borderWidth: 3 });
                  }
-
-                 // 3. حداکثر قیمت (هاشور قرمز به سمت پایین تا قیمت پایه)
                  if (res.data.max_prices) {
-                     ds.push({ 
-                         label: 'حداکثر', 
-                         data: res.data.max_prices, 
-                         borderColor: 'rgba(255, 99, 132, 0.7)', // قرمز
-                         backgroundColor: 'rgba(255, 99, 132, 0.2)', // رنگ پس‌زمینه قرمز
-                         borderDash: [5,5], 
-                         pointRadius: 0,
-                         fill: {
-                             target: '-1', // پر کردن فاصله تا دیتاست قبلی (قیمت پایه)
-                             above: 'rgba(255, 99, 132, 0.2)', // بالای قیمت پایه (تا حداکثر) قرمز کمرنگ
-                             below: 'rgba(255, 255, 255, 0)'
-                         }
-                     });
+                     ds.push({ label: 'حداکثر', data: res.data.max_prices, borderColor: 'rgba(255, 99, 132, 0.7)', backgroundColor: 'rgba(255, 99, 132, 0.2)', borderDash: [5,5], pointRadius: 0, fill: { target: '-1', above: 'rgba(255, 99, 132, 0.2)', below: 'rgba(255, 255, 255, 0)' } });
                  }
                  
                  chartInstance = new Chart(ctx, { 
@@ -264,14 +239,8 @@ jQuery(document).ready(function ($) {
                      options: { 
                          responsive: true, 
                          spanGaps: true,
-                         plugins: {
-                             filler: {
-                                 propagate: false // جلوگیری از تداخل پر کردن
-                             }
-                         },
-                         scales: {
-                             y: { beginAtZero: false } // محور Y از صفر شروع نشود تا تغییرات بهتر دیده شود
-                         }
+                         plugins: { filler: { propagate: false } },
+                         scales: { y: { beginAtZero: false } }
                      } 
                  });
             } else { alert(res.data.message || 'داده‌ای یافت نشد'); modal.hide(); }
