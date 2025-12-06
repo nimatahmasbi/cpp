@@ -1,11 +1,10 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
-// واکشی تنظیمات و URL آیکون‌ها
 $disable_base_price = get_option('cpp_disable_base_price', 0);
 $cart_icon_url = CPP_ASSETS_URL . 'images/cart-icon.png';
 $chart_icon_url = CPP_ASSETS_URL . 'images/chart-icon.png';
-$default_image = get_option('cpp_default_product_image', CPP_ASSETS_URL . 'images/default-product.png'); // لوگوی پیش‌فرض
+$default_image = get_option('cpp_default_product_image', CPP_ASSETS_URL . 'images/default-product.png'); 
 
 ?>
 
@@ -28,6 +27,10 @@ $default_image = get_option('cpp_default_product_image', CPP_ASSETS_URL . 'image
         <tbody>
         <?php foreach ($products as $product) :
             $product_image_url = !empty($product->image_url) ? esc_url($product->image_url) : esc_url($default_image);
+            
+            $min_clean = str_replace(',', '', $product->min_price);
+            $max_clean = str_replace(',', '', $product->max_price);
+            $show_single = ($min_clean == $max_clean && is_numeric($min_clean));
         ?>
             <tr data-id="<?php echo $product->id; ?>">
                 <td>
@@ -41,22 +44,22 @@ $default_image = get_option('cpp_default_product_image', CPP_ASSETS_URL . 'image
                 <td><?php echo esc_html($product->product_type); ?></td>
                 <td><?php echo esc_html($product->unit); ?></td>
                 <td><?php echo esc_html($product->load_location); ?></td>
-                <td><?php echo date_i18n('Y/m/d H:i', strtotime(get_date_from_gmt($product->last_updated_at))); // Convert GMT to local time ?></td>
+                <td><?php echo date_i18n('Y/m/d H:i', strtotime(get_date_from_gmt($product->last_updated_at))); ?></td>
                 <?php if (!$disable_base_price) : ?>
                     <td class="cpp-base-price">
                          <?php
-                            // Format price if numeric after removing commas
                             $price_cleaned = str_replace(',', '', $product->price);
                             echo is_numeric($price_cleaned) ? esc_html(number_format_i18n((float)$price_cleaned)) : esc_html($product->price);
                          ?>
                     </td>
                 <?php endif; ?>
                 <td class="cpp-price-range">
-                    <?php if (!empty($product->min_price) && !empty($product->max_price)) :
-                         $min_cleaned = str_replace(',', '', $product->min_price);
-                         $max_cleaned = str_replace(',', '', $product->max_price);
-                    ?>
-                        <?php echo is_numeric($min_cleaned) ? esc_html(number_format_i18n((float)$min_cleaned)) : esc_html($product->min_price); ?> - <?php echo is_numeric($max_cleaned) ? esc_html(number_format_i18n((float)$max_cleaned)) : esc_html($product->max_price); ?>
+                    <?php if (!empty($product->min_price) && !empty($product->max_price)) : ?>
+                        <?php if ($show_single) : ?>
+                             <?php echo esc_html(number_format_i18n((float)$min_clean)); ?>
+                        <?php else : ?>
+                             <?php echo is_numeric($min_clean) ? esc_html(number_format_i18n((float)$min_clean)) : esc_html($product->min_price); ?> - <?php echo is_numeric($max_clean) ? esc_html(number_format_i18n((float)$max_clean)) : esc_html($product->max_price); ?>
+                        <?php endif; ?>
                     <?php else: ?>
                         <span class="cpp-price-not-set"><?php _e('تماس بگیرید', 'cpp-full'); ?></span>
                     <?php endif; ?>
