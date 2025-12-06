@@ -157,14 +157,14 @@ class CPP_Core {
         return [ 'labels' => $labels, 'prices' => $prices, 'min_prices' => $min_prices, 'max_prices' => $max_prices ];
     }
     
-    // اصلاح ترتیب: بر اساس ID صعودی
+    // اصلاح ترتیب: صعودی بر اساس ID
     public static function get_all_categories() {
         global $wpdb;
         if($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", CPP_DB_CATEGORIES)) != CPP_DB_CATEGORIES) return [];
         return $wpdb->get_results("SELECT id, name, slug, image_url, created FROM " . CPP_DB_CATEGORIES . " ORDER BY id ASC");
     }
     
-    // اصلاح ترتیب: بر اساس ID صعودی
+    // اصلاح ترتیب: صعودی بر اساس ID
     public static function get_all_orders() {
         global $wpdb;
         if($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", CPP_DB_ORDERS)) != CPP_DB_ORDERS) return [];
