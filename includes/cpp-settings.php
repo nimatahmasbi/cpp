@@ -6,6 +6,7 @@ add_action('admin_init', 'cpp_register_settings_and_fields');
 function cpp_register_settings_and_fields() {
     register_setting('cpp_general_settings_grp', 'cpp_disable_base_price');
     register_setting('cpp_general_settings_grp', 'cpp_products_per_page');
+    // تغییر: ذخیره به عنوان آرایه برای پشتیبانی از چند نقش
     register_setting('cpp_general_settings_grp', 'cpp_admin_capability', array(
         'type' => 'array', 
         'sanitize_callback' => 'cpp_sanitize_roles'
