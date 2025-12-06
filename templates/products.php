@@ -9,9 +9,7 @@ $default_image_url = CPP_ASSETS_URL . 'images/default-product.png';
 $site_icon = get_site_icon_url(100);
 if ($site_icon) { $default_image_url = $site_icon; }
 
-// --- شروع تغییر: واکشی تنظیمات قیمت پایه ---
 $disable_base_price = get_option('cpp_disable_base_price', 0);
-// --- پایان تغییر ---
 ?>
 
 <div class="wrap">
@@ -74,7 +72,7 @@ $disable_base_price = get_option('cpp_disable_base_price', 0);
                             <input type="text" name="max_price" class="small-text" placeholder="<?php _e('حداکثر', 'cpp-full'); ?>">
                         </td>
                     </tr>
-                    <?php else: // اگر قیمت پایه غیرفعال بود، یک فیلد مخفی برای آن ارسال می‌کنیم تا خطا ندهد ?>
+                    <?php else: ?>
                     <input type="hidden" name="price" value="0">
                     <tr>
                         <th><?php _e('بازه قیمت (حداقل - حداکثر)', 'cpp-full'); ?></th>
@@ -124,6 +122,11 @@ $disable_base_price = get_option('cpp_disable_base_price', 0);
         <tbody class="cpp-products-list">
         <?php if ($products) : foreach ($products as $product) : 
             $img_src = esc_url($product->image_url) ? esc_url($product->image_url) : $default_image_url;
+            
+            // بررسی برابر بودن قیمت‌ها برای نمایش در جدول
+            $min_clean = str_replace(',', '', $product->min_price);
+            $max_clean = str_replace(',', '', $product->max_price);
+            $show_single_price = ($min_clean == $max_clean && is_numeric($min_clean));
         ?>
             <tr data-id="<?php echo $product->id; ?>">
                 <td><?php echo $product->id; ?></td>
@@ -138,8 +141,12 @@ $disable_base_price = get_option('cpp_disable_base_price', 0);
                 <td class="cpp-quick-edit" data-id="<?php echo $product->id; ?>" data-field="price" data-table-type="products"><?php echo esc_html($product->price); ?></td>
                 <?php endif; ?>
                 <td>
-                    <span class="cpp-quick-edit" data-id="<?php echo $product->id; ?>" data-field="min_price" data-table-type="products"><?php echo esc_html($product->min_price); ?></span> -
-                    <span class="cpp-quick-edit" data-id="<?php echo $product->id; ?>" data-field="max_price" data-table-type="products"><?php echo esc_html($product->max_price); ?></span>
+                    <span class="cpp-quick-edit" data-id="<?php echo $product->id; ?>" data-field="min_price" data-table-type="products"><?php echo esc_html($product->min_price); ?></span>
+                    <?php if (!$show_single_price) : ?>
+                        - <span class="cpp-quick-edit" data-id="<?php echo $product->id; ?>" data-field="max_price" data-table-type="products"><?php echo esc_html($product->max_price); ?></span>
+                    <?php else: ?>
+                        <span class="cpp-quick-edit" data-id="<?php echo $product->id; ?>" data-field="max_price" data-table-type="products" style="display:none;"><?php echo esc_html($product->max_price); ?></span>
+                    <?php endif; ?>
                 </td>
                 <td class="cpp-quick-edit-select" data-id="<?php echo $product->id; ?>" data-field="is_active" data-table-type="products" data-current="<?php echo $product->is_active; ?>">
                     <?php echo $product->is_active ? __('فعال', 'cpp-full') : __('غیرفعال', 'cpp-full'); ?>
@@ -156,14 +163,6 @@ $disable_base_price = get_option('cpp_disable_base_price', 0);
         <?php endif; ?>
         </tbody>
     </table>
-</div>
-
-<div id="cpp-chart-modal" class="cpp-modal-overlay" style="display:none;">
-    <div class="cpp-modal-container">
-        <span class="cpp-close-modal" onclick="jQuery('#cpp-chart-modal').hide();">×</span>
-        <h2><?php _e('نمودار تغییرات قیمت', 'cpp-full'); ?></h2>
-        <div class="cpp-chart-modal-content"><canvas id="cppPriceChart" width="400" height="150"></canvas></div>
-    </div>
 </div>
 
 <script>
