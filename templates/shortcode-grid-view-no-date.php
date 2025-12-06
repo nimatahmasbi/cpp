@@ -1,5 +1,4 @@
 <?php
-// Template for [cpp_products_grid_view_no_date] shortcode
 if (!defined('ABSPATH')) exit;
 
 $disable_base_price = get_option('cpp_disable_base_price', 0);
@@ -35,6 +34,9 @@ $default_image = get_option('cpp_default_product_image', CPP_ASSETS_URL . 'image
         <tbody>
             <?php if (!empty($products)) : foreach ($products as $product) :
                 $product_image_url = !empty($product->image_url) ? esc_url($product->image_url) : esc_url($default_image);
+                $min_clean = str_replace(',', '', $product->min_price);
+                $max_clean = str_replace(',', '', $product->max_price);
+                $show_single = ($min_clean == $max_clean && is_numeric($min_clean));
             ?>
                 <tr class="product-row" data-cat-id="<?php echo esc_attr($product->cat_id); ?>">
                     <td class="col-product-name" data-colname="<?php esc_attr_e('محصول', 'cpp-full'); ?>">
@@ -57,11 +59,12 @@ $default_image = get_option('cpp_default_product_image', CPP_ASSETS_URL . 'image
                     <?php endif; ?>
 
                      <td class="col-price-range" data-colname="<?php esc_attr_e('بازه قیمت', 'cpp-full'); ?>">
-                        <?php if (!empty($product->min_price) && !empty($product->max_price)) :
-                             $min_cleaned = str_replace(',', '', $product->min_price);
-                             $max_cleaned = str_replace(',', '', $product->max_price);
-                        ?>
-                            <?php echo is_numeric($min_cleaned) ? esc_html(number_format_i18n((float)$min_cleaned)) : esc_html($product->min_price); ?> - <?php echo is_numeric($max_cleaned) ? esc_html(number_format_i18n((float)$max_cleaned)) : esc_html($product->max_price); ?>
+                        <?php if (!empty($product->min_price) && !empty($product->max_price)) : ?>
+                            <?php if ($show_single) : ?>
+                                <?php echo esc_html(number_format_i18n((float)$min_clean)); ?>
+                            <?php else : ?>
+                                <?php echo is_numeric($min_clean) ? esc_html(number_format_i18n((float)$min_clean)) : esc_html($product->min_price); ?> - <?php echo is_numeric($max_clean) ? esc_html(number_format_i18n((float)$max_clean)) : esc_html($product->max_price); ?>
+                            <?php endif; ?>
                         <?php else: ?>
                             <span class="cpp-price-not-set"><?php _e('تماس بگیرید', 'cpp-full'); ?></span>
                         <?php endif; ?>
@@ -98,7 +101,7 @@ $default_image = get_option('cpp_default_product_image', CPP_ASSETS_URL . 'image
          </tfoot>
     </table>
 
-    <?php if ($total_products > $products_per_page) : // Show only if needed ?>
+    <?php if ($total_products > $products_per_page) : ?>
     <div class="cpp-grid-view-footer">
         <button class="cpp-view-more-btn" data-page="1" data-shortcode-type="no_date"><?php _e('مشاهده بیشتر', 'cpp-full'); ?></button>
     </div>
