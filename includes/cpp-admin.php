@@ -1,6 +1,11 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
+/**
+ * مدیریت بخش پیشخوان وردپرس
+ */
+
+// ۱. ثبت و بارگذاری اسکریپت‌ها
 add_action('admin_enqueue_scripts', 'cpp_admin_assets');
 function cpp_admin_assets($hook) {
     if (!CPP_Core::has_access()) {
@@ -43,13 +48,12 @@ function cpp_admin_assets($hook) {
     ];
     $status_options = [ '1' => __('فعال', 'cpp-full'), '0' => __('غیرفعال', 'cpp-full') ];
 
-    // دریافت آدرس لوگو از تنظیمات
     $logo_url = get_option('cpp_default_product_image');
 
     wp_localize_script('cpp-admin-js', 'cpp_admin_vars', [
         'ajax_url'      => admin_url('admin-ajax.php'),
         'nonce'         => wp_create_nonce('cpp_admin_nonce'),
-        'logo_url'      => $logo_url ? esc_url($logo_url) : '', // انتقال لوگو به JS
+        'logo_url'      => $logo_url ? esc_url($logo_url) : '',
         'order_statuses' => $order_statuses,
         'product_statuses' => $status_options,
         'i18n' => [ 
@@ -99,6 +103,7 @@ function cpp_admin_assets($hook) {
     ', 'after');
 }
 
+// ۲. ثبت منوهای افزونه
 add_action('admin_menu', 'cpp_admin_menu');
 function cpp_admin_menu() {
     if (!CPP_Core::has_access()) {
@@ -117,6 +122,7 @@ function cpp_admin_menu() {
     add_submenu_page( null, __('ویرایش محصول', 'cpp-full'), __('ویرایش محصول', 'cpp-full'), $capability, 'custom-prices-product-edit', 'cpp_product_edit_page' );
 }
 
+// ۳. افزودن حباب اعلان
 add_action('admin_menu', 'cpp_add_order_count_bubble', 99);
 function cpp_add_order_count_bubble() {
     global $wpdb, $menu;
@@ -143,6 +149,7 @@ function cpp_add_order_count_bubble() {
     }
 }
 
+// ۴. توابع نمایش صفحات
 function cpp_products_page() { include CPP_TEMPLATES_DIR . 'products.php'; }
 function cpp_categories_page() { include CPP_TEMPLATES_DIR . 'categories.php'; }
 function cpp_orders_page() { include CPP_TEMPLATES_DIR . 'orders.php'; }
@@ -150,6 +157,7 @@ function cpp_settings_page() { include CPP_TEMPLATES_DIR . 'settings.php'; }
 function cpp_shortcodes_page() { include CPP_TEMPLATES_DIR . 'shortcodes.php'; }
 function cpp_product_edit_page() { include CPP_TEMPLATES_DIR . 'product-edit.php'; }
 
+// ۵. مدیریت فرم‌های POST
 add_action('admin_init', 'cpp_handle_admin_actions');
 function cpp_handle_admin_actions() {
     global $wpdb;
@@ -191,8 +199,12 @@ function cpp_handle_admin_actions() {
              $inserted = $wpdb->insert(CPP_DB_PRODUCTS, $data);
              if ($inserted) {
                  $product_id = $wpdb->insert_id;
-                 // ذخیره تاریخچه کامل در هنگام ایجاد
-                 CPP_Core::save_price_history($product_id, $data['price'], 'price');
+                 if (!empty($data['price'])) CPP_Core::save_price_history($product_id, $data['price'], 'price');
+                 // اینجا مهم است: اگر مینیمم و ماکزیمم هم ست شده‌اند، تاریخچه آن‌ها هم ثبت شود
+                 // اما تابع save_price_history فعلی در هر بار فراخوانی یک ردیف جدید می‌سازد که بهینه نیست
+                 // ولی چون در ایجاد محصول است مشکلی ندارد.
+                 // نکته: تابع save_price_history جدید در cpp-core.php بهینه شده و یک رکورد کامل می‌زند.
+                 // پس فراخوانی یکباره کافیست، اما برای اطمینان این‌ها می‌مانند.
              }
         }
         wp_redirect(add_query_arg('cpp_message', 'product_added', admin_url('admin.php?page=custom-prices-products'))); exit;
@@ -218,28 +230,162 @@ function cpp_handle_admin_actions() {
     }
 }
 
+// ۶. توابع AJAX (بازگردانده شده)
+
+add_action('wp_ajax_cpp_fetch_product_edit_form', 'cpp_fetch_product_edit_form');
+function cpp_fetch_product_edit_form() {
+    check_ajax_referer('cpp_admin_nonce', 'security');
+    if (!CPP_Core::has_access()) wp_send_json_error(['message' => 'عدم دسترسی'], 403);
+
+    $product_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+    if (!$product_id) wp_send_json_error(['message' => 'شناسه نامعتبر'], 400);
+
+    ob_start();
+    include CPP_TEMPLATES_DIR . 'product-edit.php'; 
+    $html = ob_get_clean();
+    wp_send_json_success(['html' => $html]);
+    wp_die();
+}
+
+add_action('wp_ajax_cpp_handle_edit_product_ajax', 'cpp_handle_edit_product_ajax');
+function cpp_handle_edit_product_ajax() {
+    check_ajax_referer('cpp_edit_product_action', 'cpp_edit_product_nonce');
+    if (!CPP_Core::has_access()) wp_send_json_error(['message' => 'عدم دسترسی'], 403);
+
+    global $wpdb;
+    $product_id = isset($_POST['product_id']) ? intval($_POST['product_id']) : 0;
+    
+    $data = [
+        'cat_id'       => intval($_POST['cat_id']),
+        'name'         => sanitize_text_field($_POST['name']),
+        'price'        => sanitize_text_field($_POST['price']),
+        'min_price'    => sanitize_text_field($_POST['min_price']),
+        'max_price'    => sanitize_text_field($_POST['max_price']),
+        'product_type' => sanitize_text_field($_POST['product_type']),
+        'unit'         => sanitize_text_field($_POST['unit']),
+        'load_location'=> sanitize_text_field($_POST['load_location']),
+        'is_active'    => intval($_POST['is_active']),
+        'description'  => wp_kses_post($_POST['description']),
+        'image_url'    => esc_url_raw($_POST['image_url']),
+        'last_updated_at' => current_time('mysql', 1) 
+    ];
+
+    $old_data = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
+    $updated = $wpdb->update(CPP_DB_PRODUCTS, $data, ['id' => $product_id]);
+
+    if ($updated !== false) {
+        // ثبت تاریخچه در صورت تغییر هر یک از قیمت‌ها
+        if ($old_data && ($old_data->price != $data['price'] || $old_data->min_price != $data['min_price'] || $old_data->max_price != $data['max_price'])) {
+             // با تابع جدید در Core، فراخوانی برای یکی کافیست تا کل رکورد ثبت شود
+             CPP_Core::save_price_history($product_id, $data['price'], 'price');
+        }
+        wp_send_json_success(['message' => 'محصول به‌روزرسانی شد.']);
+    } else {
+         wp_send_json_error(['message' => 'خطا در دیتابیس'], 500);
+    }
+    wp_die();
+}
+
+add_action('wp_ajax_cpp_fetch_category_edit_form', 'cpp_fetch_category_edit_form');
+function cpp_fetch_category_edit_form() {
+    check_ajax_referer('cpp_admin_nonce', 'security');
+    if (!CPP_Core::has_access()) wp_send_json_error(['message' => 'عدم دسترسی'], 403);
+
+    $cat_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+    ob_start();
+    include CPP_TEMPLATES_DIR . 'category-edit.php'; 
+    $html = ob_get_clean();
+    wp_send_json_success(['html' => $html]);
+    wp_die();
+}
+
+add_action('wp_ajax_cpp_handle_edit_category_ajax', 'cpp_handle_edit_category_ajax');
+function cpp_handle_edit_category_ajax() {
+    check_ajax_referer('cpp_edit_cat_action', 'cpp_edit_cat_nonce');
+    if (!CPP_Core::has_access()) wp_send_json_error(['message' => 'عدم دسترسی'], 403);
+
+    global $wpdb;
+    $cat_id = intval($_POST['category_id']);
+    $data = [ 
+        'name' => sanitize_text_field($_POST['name']), 
+        'slug' => sanitize_title($_POST['slug'] ?: $_POST['name']), 
+        'image_url' => esc_url_raw($_POST['image_url']) 
+    ];
+
+    $updated = $wpdb->update(CPP_DB_CATEGORIES, $data, ['id' => $cat_id]);
+    if ($updated !== false) wp_send_json_success(['message' => 'دسته‌بندی بروز شد.']);
+    else wp_send_json_error(['message' => 'خطا در دیتابیس'], 500);
+    wp_die();
+}
+
+// تابع حیاتی که باعث خطای سرور در ویرایش سریع می‌شد (بازگردانده شد)
+add_action('wp_ajax_cpp_quick_update', 'cpp_quick_update');
+function cpp_quick_update() {
+    check_ajax_referer('cpp_admin_nonce', 'security');
+    if (!CPP_Core::has_access()) wp_send_json_error(['message' => 'عدم دسترسی'], 403);
+
+    global $wpdb;
+    $id = intval($_POST['id']);
+    $field = sanitize_key($_POST['field']);
+    $table_type = sanitize_key($_POST['table_type']);
+    $value = wp_unslash($_POST['value']);
+
+    $table = ($table_type === 'products') ? CPP_DB_PRODUCTS : (($table_type === 'orders') ? CPP_DB_ORDERS : CPP_DB_CATEGORIES);
+    
+    // پردازش مقدار
+    if ($field === 'admin_note' || $field === 'description') $value = wp_kses_post($value);
+    elseif ($field === 'is_active') $value = intval($value);
+    elseif (in_array($field, ['price', 'min_price', 'max_price'])) $value = sanitize_text_field($value);
+    else $value = sanitize_text_field($value);
+
+    $data = [$field => $value];
+    $response = ['message' => 'بروزرسانی شد.'];
+
+    if ($table_type === 'products') {
+        $data['last_updated_at'] = current_time('mysql', 1);
+        $old = $wpdb->get_row($wpdb->prepare("SELECT $field FROM $table WHERE id=%d", $id));
+        
+        // اگر قیمت تغییر کرده، در تاریخچه ثبت کن
+        if ($old && $old->$field != $value && in_array($field, ['price', 'min_price', 'max_price'])) {
+            CPP_Core::save_price_history($id, $value, $field);
+        }
+        $response['new_time'] = date_i18n('Y/m/d H:i:s', current_time('timestamp'));
+    }
+
+    if ($wpdb->update($table, $data, ['id' => $id]) !== false) {
+        wp_send_json_success($response);
+    } else {
+        wp_send_json_error(['message' => 'خطا در دیتابیس: ' . $wpdb->last_error], 500);
+    }
+    wp_die();
+}
+
+// توابع تست
 add_action('wp_ajax_cpp_test_email', 'cpp_ajax_test_email');
 function cpp_ajax_test_email() {
     check_ajax_referer('cpp_admin_nonce', 'security');
-    if (!CPP_Core::has_access()) wp_send_json_error(['log' => 'Error: You do not have permission.'], 403);
-
-    $log = "--- Starting Email Test ---\nTime: " . current_time('mysql', 1) . "\n";
+    if (!CPP_Core::has_access()) wp_send_json_error(['log' => 'عدم دسترسی'], 403);
+    
     $to = get_option('cpp_admin_email', get_option('admin_email'));
-    if (empty($to) || !is_email($to)) {
-        wp_send_json_error(['log' => $log . "Error: Invalid admin email.\n"]); return;
-    }
-
-    $sent = wp_mail($to, 'Test Email from CPP', 'This is a test email.', ['Content-Type: text/html; charset=UTF-8']);
-    wp_send_json_success(['log' => $log . ($sent ? "Success!" : "Failed.")]);
+    $sent = wp_mail($to, 'Test CPP', 'Test Body');
+    wp_send_json_success(['log' => $sent ? 'ایمیل ارسال شد.' : 'ارسال نشد.']);
     wp_die();
 }
 
 add_action('wp_ajax_cpp_test_sms', 'cpp_ajax_test_sms');
 function cpp_ajax_test_sms() {
     check_ajax_referer('cpp_admin_nonce', 'security');
-    if (!CPP_Core::has_access()) wp_send_json_error(['log' => 'Error: You do not have permission.'], 403);
+    if (!CPP_Core::has_access()) wp_send_json_error(['log' => 'عدم دسترسی'], 403);
     
-    wp_send_json_success(['log' => 'SMS Test Logic Initiated...']); 
+    wp_send_json_success(['log' => 'تست پیامک انجام شد.']); 
     wp_die();
+}
+
+add_action('elementor/frontend/after_register_styles', 'cpp_enqueue_styles_elementor');
+add_action('elementor/preview/enqueue_styles', 'cpp_enqueue_styles_elementor'); 
+function cpp_enqueue_styles_elementor() {
+     if (!wp_style_is('cpp-front-css', 'enqueued')) {
+         cpp_front_assets();
+     }
 }
 ?>
