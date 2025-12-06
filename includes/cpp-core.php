@@ -3,6 +3,9 @@ if (!defined('ABSPATH')) exit;
 
 class CPP_Core {
 
+    /**
+     * شروع نشست (Session) برای کپچا
+     */
     public static function init_session() {
         if (!session_id() && !headers_sent()) {
             try {
@@ -14,11 +17,14 @@ class CPP_Core {
     }
 
     /**
-     * بررسی دسترسی کاربر (پشتیبانی از چند نقش)
+     * بررسی سطح دسترسی کاربر (پشتیبانی از چند نقش کاربری)
+     * این تابع بررسی می‌کند که آیا کاربر فعلی یکی از نقش‌های انتخاب شده در تنظیمات را دارد یا خیر.
      */
     public static function has_access() {
+        // دریافت نقش‌های مجاز از تنظیمات
         $allowed_roles = get_option('cpp_admin_capability');
 
+        // مدیریت سازگاری با نسخه‌های قدیمی (اگر تنظیمات رشته بود یا خالی بود)
         if (empty($allowed_roles)) {
             $allowed_roles = ['administrator'];
         } elseif (is_string($allowed_roles)) {
@@ -30,14 +36,19 @@ class CPP_Core {
             return false;
         }
 
+        // بررسی تداخل نقش‌های کاربر با نقش‌های مجاز
         foreach ($current_user->roles as $user_role) {
             if (in_array($user_role, $allowed_roles)) {
                 return true;
             }
         }
+
         return false;
     }
 
+    /**
+     * ایجاد جداول دیتابیس
+     */
     public static function create_db_tables() {
         global $wpdb;
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
@@ -53,7 +64,7 @@ class CPP_Core {
         dbDelta($sql3);
         dbDelta($sql4);
 
-        // آپدیت ساختار جداول
+        // آپدیت ساختار جداول قدیمی در صورت نیاز
         $table_name_history = CPP_DB_PRICE_HISTORY;
         if($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_name_history)) == $table_name_history) {
             $history_columns = $wpdb->get_col("DESC `{$table_name_history}`");
@@ -68,6 +79,9 @@ class CPP_Core {
          }
     }
 
+    /**
+     * ثبت تاریخچه قیمت
+     */
     public static function save_price_history($product_id, $new_value, $field_name = 'price') {
          global $wpdb;
          $product_id = intval($product_id);
@@ -91,6 +105,10 @@ class CPP_Core {
           return false;
      }
 
+    /**
+     * دریافت داده‌های نمودار
+     * اصلاح شده: نمایش قیمت فعلی در صورت نبودن تاریخچه
+     */
     public static function get_chart_data($product_id, $months = 6) {
         global $wpdb;
 
@@ -115,13 +133,15 @@ class CPP_Core {
             ORDER BY change_time ASC
         ", $product_id, $date_limit));
 
-        // --- اگر تاریخچه خالی بود، قیمت فعلی را نشان بده ---
+        // --- اصلاح: اگر تاریخچه خالی بود، قیمت فعلی محصول را به عنوان نقطه شروع اضافه کن ---
         if (empty($history)) {
             $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
+            
             if ($current_product) {
                 $dummy_row = new stdClass();
                 $dummy_row->change_time = $current_product->last_updated_at;
                 
+                // اطمینان از معتبر بودن زمان
                 if (empty($dummy_row->change_time) || substr($dummy_row->change_time, 0, 4) == '0000') {
                     $dummy_row->change_time = current_time('mysql', 1);
                 }
@@ -130,6 +150,7 @@ class CPP_Core {
                 $dummy_row->min_price = ($current_product->min_price !== '') ? $current_product->min_price : null;
                 $dummy_row->max_price = ($current_product->max_price !== '') ? $current_product->max_price : null;
                 
+                // اگر حداقل یکی از قیمت‌ها مقدار داشت، آن را به عنوان داده نمودار در نظر بگیر
                 if ($dummy_row->price !== null || $dummy_row->min_price !== null || $dummy_row->max_price !== null) {
                     $history[] = $dummy_row;
                 }
@@ -143,7 +164,7 @@ class CPP_Core {
              
              foreach ($history as $row) {
                  $local_timestamp = strtotime(get_date_from_gmt($row->change_time));
-                 if (!$local_timestamp) $local_timestamp = current_time('timestamp');
+                 if (!$local_timestamp) $local_timestamp = current_time('timestamp'); // Fallback to now
                  
                  $labels[] = date_i18n('Y/m/d H:i', $local_timestamp);
                  
@@ -170,11 +191,15 @@ class CPP_Core {
         if($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", CPP_DB_ORDERS)) != CPP_DB_ORDERS) return [];
         return $wpdb->get_results("SELECT * FROM " . CPP_DB_ORDERS . " ORDER BY created DESC");
     }
-} 
 
+} // End Class
+
+// اجرای هوک‌های سراسری
 add_action('init', ['CPP_Core', 'init_session'], 1);
 
-// توابع AJAX
+// --- توابع AJAX سمت کاربر (Front-end) ---
+
+// ۱. تولید کپچا
 add_action('wp_ajax_cpp_get_captcha', 'cpp_ajax_get_captcha');
 add_action('wp_ajax_nopriv_cpp_get_captcha', 'cpp_ajax_get_captcha');
 function cpp_ajax_get_captcha() {
@@ -186,9 +211,11 @@ function cpp_ajax_get_captcha() {
     wp_die();
 }
 
+// ۲. دریافت اطلاعات نمودار (با اصلاح بررسی امنیتی برای رفع خطای سرور)
 add_action('wp_ajax_cpp_get_chart_data', 'cpp_ajax_get_chart_data');
 add_action('wp_ajax_nopriv_cpp_get_chart_data', 'cpp_ajax_get_chart_data');
 function cpp_ajax_get_chart_data() {
+    // اصلاح: بررسی هر دو نوع Nonce (هم ادمین برای پیش‌نمایش در پنل، هم فرانت برای سایت)
     $is_valid_nonce = false;
     if (isset($_REQUEST['security']) && wp_verify_nonce($_REQUEST['security'], 'cpp_admin_nonce')) {
         $is_valid_nonce = true;
@@ -214,6 +241,7 @@ function cpp_ajax_get_chart_data() {
     wp_die();
 }
 
+// ۳. ثبت سفارش
 add_action('wp_ajax_cpp_submit_order', 'cpp_submit_order');
 add_action('wp_ajax_nopriv_cpp_submit_order', 'cpp_submit_order');
 function cpp_submit_order() {
@@ -271,6 +299,7 @@ function cpp_submit_order() {
 
     $order_id = $wpdb->insert_id;
 
+    // ارسال اعلان‌ها
     $admin_placeholders = [
         '{product_name}'  => $product->name,
         '{customer_name}' => $customer_name,
