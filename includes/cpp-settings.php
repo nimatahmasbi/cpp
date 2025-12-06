@@ -6,11 +6,7 @@ add_action('admin_init', 'cpp_register_settings_and_fields');
 function cpp_register_settings_and_fields() {
     register_setting('cpp_general_settings_grp', 'cpp_disable_base_price');
     register_setting('cpp_general_settings_grp', 'cpp_products_per_page');
-    // تغییر: ذخیره به عنوان آرایه برای پشتیبانی از چند نقش
-    register_setting('cpp_general_settings_grp', 'cpp_admin_capability', array(
-        'type' => 'array', 
-        'sanitize_callback' => 'cpp_sanitize_roles'
-    ));
+    register_setting('cpp_general_settings_grp', 'cpp_admin_capability', array('type' => 'array', 'sanitize_callback' => 'cpp_sanitize_roles'));
 
     register_setting('cpp_shortcode_settings_grp', 'cpp_default_product_image');
     register_setting('cpp_shortcode_settings_grp', 'cpp_grid_with_date_show_image');
@@ -49,9 +45,7 @@ function cpp_register_settings_and_fields() {
 }
 
 function cpp_sanitize_roles($input) {
-    if (is_array($input)) {
-        return array_map('sanitize_text_field', $input);
-    }
+    if (is_array($input)) return array_map('sanitize_text_field', $input);
     return [];
 }
 
@@ -68,12 +62,8 @@ function cpp_products_per_page_callback() {
 function cpp_admin_capability_callback() {
     $roles = get_editable_roles();
     $saved_roles = get_option('cpp_admin_capability');
-    
-    if (empty($saved_roles)) {
-        $saved_roles = ['administrator'];
-    } elseif (is_string($saved_roles)) {
-        $saved_roles = ['administrator']; 
-    }
+    if (empty($saved_roles)) $saved_roles = ['administrator'];
+    elseif (is_string($saved_roles)) $saved_roles = ['administrator']; 
 
     echo '<fieldset><legend class="screen-reader-text"><span>نقش‌های مجاز</span></legend>';
     foreach ($roles as $role_slug => $role_info) {
@@ -93,9 +83,7 @@ function cpp_default_product_image_callback() {
     echo '<input type="text" name="cpp_default_product_image" value="' . esc_url($image_url) . '" class="regular-text" id="cpp-default-image-url"/>';
     echo '<button type="button" class="button cpp-upload-btn" data-input-id="cpp-default-image-url">' . __('انتخاب تصویر', 'cpp-full') . '</button>';
     echo '<div class="cpp-image-preview">';
-    if ($image_url) {
-        echo '<img src="' . esc_url($image_url) . '" style="max-width: 100px; height: auto; margin-top: 10px;">';
-    }
+    if ($image_url) echo '<img src="' . esc_url($image_url) . '" style="max-width: 100px; height: auto; margin-top: 10px;">';
     echo '</div></div>';
 }
 
