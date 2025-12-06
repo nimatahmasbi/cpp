@@ -42,7 +42,6 @@ class CPP_Core {
         dbDelta($sql3);
         dbDelta($sql4);
 
-        // آپدیت ساختار جداول
         $table_name_history = CPP_DB_PRICE_HISTORY;
         if($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_name_history)) == $table_name_history) {
             $history_columns = $wpdb->get_col("DESC `{$table_name_history}`");
@@ -57,13 +56,11 @@ class CPP_Core {
          }
     }
 
-    // ثبت تاریخچه کامل (هر سه قیمت)
     public static function save_price_history($product_id, $new_value, $field_name = 'price') {
          global $wpdb;
          $product_id = intval($product_id);
          if (!$product_id) return false;
          
-         // گرفتن مقادیر فعلی برای پر کردن جاهای خالی
          $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
          if (!$current_product) return false;
 
@@ -88,7 +85,6 @@ class CPP_Core {
           return false;
      }
 
-    // تمیزکردن اعداد (فارسی به انگلیسی و حذف کاما)
     private static function clean_price_value($value) {
         if ($value === null || $value === '') return null;
         $persian = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
@@ -100,71 +96,40 @@ class CPP_Core {
         return ($value === '') ? null : (float)$value;
     }
 
+    // --- اصلاح اساسی تابع دریافت داده نمودار ---
     public static function get_chart_data($product_id, $months = 6) {
         global $wpdb;
-
         $product_id = intval($product_id);
         $months = intval($months);
-        
-        $labels = [];
-        $prices = [];
-        $min_prices = [];
-        $max_prices = [];
-
-        $date_limit = date('Y-m-d H:i:s', strtotime("-{$months} months", current_time('timestamp', 1)));
-
-         // 1. دریافت تاریخچه
-         $history = $wpdb->get_results($wpdb->prepare("
-            SELECT price, min_price, max_price, change_time
-            FROM " . CPP_DB_PRICE_HISTORY . "
-            WHERE product_id = %d AND change_time >= %s
-            ORDER BY change_time ASC
-        ", $product_id, $date_limit));
-
-        // 2. دریافت وضعیت فعلی محصول
-        $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
-
-        // 3. ترکیب تاریخچه با وضعیت فعلی
-        // اگر تاریخچه خالی بود یا آخرین رکورد تاریخچه با وضعیت فعلی فرق داشت، وضعیت فعلی را اضافه کن
-        // این کار باعث می‌شود حتی اگر تاریخچه‌ای نباشد، نمودار یک نقطه (الان) را نشان دهد.
-        $last_history_time = !empty($history) ? end($history)->change_time : '';
-        
-        if ($current_product) {
-            // اگر زمان آپدیت محصول جدیدتر از آخرین تاریخچه است یا تاریخچه خالی است
-            if (empty($history) || ($current_product->last_updated_at > $last_history_time)) {
-                $dummy = new stdClass();
-                $dummy->change_time = $current_product->last_updated_at ? $current_product->last_updated_at : current_time('mysql', 1);
-                $dummy->price = $current_product->price;
-                $dummy->min_price = $current_product->min_price;
-                $dummy->max_price = $current_product->max_price;
-                
-                // اضافه کردن به انتهای آرایه
-                $history[] = $dummy;
-            }
-        }
-
         $disable_base_price = get_option('cpp_disable_base_price', 0);
+        
+        $labels = []; $prices = []; $min_prices = []; $max_prices = [];
 
+        // 1. دریافت تاریخچه گذشته
+        $date_limit = date('Y-m-d H:i:s', strtotime("-{$months} months", current_time('timestamp', 1)));
+        $history = $wpdb->get_results($wpdb->prepare("SELECT price, min_price, max_price, change_time FROM " . CPP_DB_PRICE_HISTORY . " WHERE product_id = %d AND change_time >= %s ORDER BY change_time ASC", $product_id, $date_limit));
+
+        // پردازش تاریخچه
         foreach ($history as $row) {
             $ts = strtotime(get_date_from_gmt($row->change_time));
             if (!$ts) $ts = current_time('timestamp');
             $labels[] = date_i18n('Y/m/d H:i', $ts);
-
-            $p_base = self::clean_price_value($row->price);
-            $p_min  = self::clean_price_value($row->min_price);
-            $p_max  = self::clean_price_value($row->max_price);
-
-            $prices[] = (!$disable_base_price) ? $p_base : null;
-            $min_prices[] = $p_min;
-            $max_prices[] = $p_max;
+            $prices[] = (!$disable_base_price) ? self::clean_price_value($row->price) : null;
+            $min_prices[] = self::clean_price_value($row->min_price);
+            $max_prices[] = self::clean_price_value($row->max_price);
         }
 
-        return [ 
-            'labels' => $labels, 
-            'prices' => $prices, 
-            'min_prices' => $min_prices, 
-            'max_prices' => $max_prices 
-        ];
+        // 2. دریافت و افزودن وضعیت فعلی به عنوان آخرین نقطه (بسیار مهم برای پیوستگی خطوط)
+        $current_product = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price FROM " . CPP_DB_PRODUCTS . " WHERE id = %d", $product_id));
+        if ($current_product) {
+            // همیشه زمان حال را به عنوان آخرین نقطه اضافه می‌کنیم
+            $labels[] = date_i18n('Y/m/d H:i', current_time('timestamp'));
+            $prices[] = (!$disable_base_price) ? self::clean_price_value($current_product->price) : null;
+            $min_prices[] = self::clean_price_value($current_product->min_price);
+            $max_prices[] = self::clean_price_value($current_product->max_price);
+        }
+
+        return [ 'labels' => $labels, 'prices' => $prices, 'min_prices' => $min_prices, 'max_prices' => $max_prices ];
     }
     
     public static function get_all_categories() {
@@ -182,7 +147,6 @@ class CPP_Core {
 
 add_action('init', ['CPP_Core', 'init_session'], 1);
 
-// AJAX: کپچا
 add_action('wp_ajax_cpp_get_captcha', 'cpp_ajax_get_captcha');
 add_action('wp_ajax_nopriv_cpp_get_captcha', 'cpp_ajax_get_captcha');
 function cpp_ajax_get_captcha() {
@@ -194,7 +158,6 @@ function cpp_ajax_get_captcha() {
     wp_die();
 }
 
-// AJAX: نمودار
 add_action('wp_ajax_cpp_get_chart_data', 'cpp_ajax_get_chart_data');
 add_action('wp_ajax_nopriv_cpp_get_chart_data', 'cpp_ajax_get_chart_data');
 function cpp_ajax_get_chart_data() {
@@ -212,7 +175,6 @@ function cpp_ajax_get_chart_data() {
     
     $data = CPP_Core::get_chart_data($product_id);
     
-    // بررسی نهایی: آیا حداقل یک داده عددی وجود دارد؟
     $has_any_data = false;
     foreach(['prices', 'min_prices', 'max_prices'] as $key) {
         if (!empty($data[$key])) {
@@ -230,7 +192,6 @@ function cpp_ajax_get_chart_data() {
     wp_die();
 }
 
-// AJAX: ثبت سفارش
 add_action('wp_ajax_cpp_submit_order', 'cpp_submit_order');
 add_action('wp_ajax_nopriv_cpp_submit_order', 'cpp_submit_order');
 function cpp_submit_order() {
