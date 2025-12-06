@@ -137,7 +137,7 @@ class CPP_Core {
             if (!$ts) $ts = current_time('timestamp');
             $labels[] = date_i18n('Y/m/d H:i', $ts);
 
-            // استفاده از تابع تمیزکننده جدید
+            // استفاده از تابع تمیزکننده جدید برای خواندن صحیح اعداد فارسی
             $p_base = self::clean_price_value($row->price);
             $p_min  = self::clean_price_value($row->min_price);
             $p_max  = self::clean_price_value($row->max_price);
@@ -145,14 +145,6 @@ class CPP_Core {
             $prices[] = (!$disable_base_price) ? $p_base : null;
             $min_prices[] = $p_min;
             $max_prices[] = $p_max;
-        }
-
-        // بررسی نهایی برای اطمینان از وجود داده
-        $has_data = false;
-        foreach([$prices, $min_prices, $max_prices] as $arr) {
-            if (count(array_filter($arr, function($v) { return $v !== null; })) > 0) {
-                $has_data = true; break;
-            }
         }
 
         return [ 
@@ -208,7 +200,7 @@ function cpp_ajax_get_chart_data() {
     
     $data = CPP_Core::get_chart_data($product_id);
     
-    // اگر تمام آرایه‌ها خالی یا null باشند، خطا برگردان
+    // بررسی اینکه آیا واقعاً داده‌ای وجود دارد (حتی یک نقطه)
     $has_any_data = false;
     foreach(['prices', 'min_prices', 'max_prices'] as $key) {
         if (!empty($data[$key]) && count(array_filter($data[$key], function($v){ return $v !== null; })) > 0) {
@@ -280,7 +272,6 @@ function cpp_submit_order() {
          wp_die();
     }
 
-    // ارسال اعلان‌ها
     $admin_placeholders = [
         '{product_name}'  => $product->name,
         '{customer_name}' => $customer_name,
