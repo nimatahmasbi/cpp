@@ -84,7 +84,6 @@ canvas#cppPriceChart { position: relative; z-index: 1; }
 .cpp-chart-toolbar button.active { background: #0073aa; color: #fff; border-color: #0073aa; }
 .cpp-chart-toolbar button:hover { background: #f0f0f0; }
 
-
 /* --- استایل‌های جدول سفارشات ریسپانسیو --- */
 .cpp-orders-table-wrapper {
     overflow-x: auto;
