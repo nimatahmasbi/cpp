@@ -32,6 +32,7 @@ class CPP_Core {
         $cur = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price FROM ".CPP_DB_PRODUCTS." WHERE id=%d", $pid));
         if(!$cur) return false;
         
+        // اگر فیلدی تغییر نکرده، مقدار قبلی را نگهدار تا گراف قطع نشود
         $p = ($field==='price') ? $val : $cur->price;
         $min = ($field==='min_price') ? $val : $cur->min_price;
         $max = ($field==='max_price') ? $val : $cur->max_price;
@@ -51,14 +52,15 @@ class CPP_Core {
         global $wpdb; $pid = intval($pid);
         $L=[]; $P=[]; $Min=[]; $Max=[];
         
-        // دریافت تمام تاریخچه (محدودیت زمانی را برمی‌داریم تا فیلترهای JS کار کنند)
+        // دریافت کل تاریخچه بدون محدودیت زمانی (فیلتر در JS انجام می‌شود)
         $hist = $wpdb->get_results($wpdb->prepare("SELECT price, min_price, max_price, change_time FROM ".CPP_DB_PRICE_HISTORY." WHERE product_id=%d ORDER BY change_time ASC", $pid));
         
-        // افزودن وضعیت فعلی به عنوان آخرین نقطه
+        // اضافه کردن وضعیت فعلی به عنوان آخرین نقطه
         $cur = $wpdb->get_row($wpdb->prepare("SELECT price, min_price, max_price, last_updated_at FROM ".CPP_DB_PRODUCTS." WHERE id=%d", $pid));
         if($cur) {
-            $last_time = !empty($hist) ? end($hist)->change_time : '';
-            if(empty($hist) || $cur->last_updated_at > $last_time) {
+            $last = !empty($hist) ? end($hist)->change_time : '';
+            // اگر تاریخچه خالی است یا رکورد جدیدتری داریم
+            if(empty($hist) || $cur->last_updated_at > $last) {
                 $d = new stdClass(); $d->change_time = $cur->last_updated_at?:current_time('mysql',1);
                 $d->price = $cur->price; $d->min_price = $cur->min_price; $d->max_price = $cur->max_price;
                 $hist[] = $d;
@@ -66,7 +68,6 @@ class CPP_Core {
         }
 
         $no_base = get_option('cpp_disable_base_price', 0);
-
         foreach($hist as $r) {
             $ts = strtotime(get_date_from_gmt($r->change_time)); if(!$ts) $ts = current_time('timestamp');
             $L[] = date_i18n('Y/m/d H:i', $ts);
@@ -75,12 +76,12 @@ class CPP_Core {
             $mn = self::clean($r->min_price);
             $mx = self::clean($r->max_price);
 
-            // پر کردن مقادیر خالی با قیمت پایه برای جلوگیری از قطع شدن خطوط
+            // پر کردن حفره‌های داده (اگر حداقل/حداکثر خالی بود، برابر پایه قرار بده)
             if ($mn === null && $b !== null) $mn = $b;
             if ($mx === null && $b !== null) $mx = $b;
             if ($mn === null && $mx !== null) $mn = $mx; 
 
-            // منطق میانگین‌گیری
+            // محاسبه میانگین اگر قیمت پایه غیرفعال است
             if($no_base) {
                 if($mn!==null && $mx!==null) $P[] = ($mn+$mx)/2;
                 elseif($mn!==null) $P[] = $mn;
@@ -98,7 +99,6 @@ class CPP_Core {
 }
 add_action('init', ['CPP_Core', 'init_session'], 1);
 
-// AJAX Handlers
 add_action('wp_ajax_cpp_get_captcha', 'cpp_ajax_get_captcha');
 add_action('wp_ajax_nopriv_cpp_get_captcha', 'cpp_ajax_get_captcha');
 function cpp_ajax_get_captcha() { check_ajax_referer('cpp_front_nonce','nonce'); CPP_Core::init_session(); $c=rand(1000,9999); $_SESSION['cpp_captcha_code']=(string)$c; wp_send_json_success(['code'=>(string)$c]); }
@@ -111,7 +111,6 @@ function cpp_ajax_get_chart_data() {
     if(!$ok) wp_send_json_error(['message'=>'عدم دسترسی'], 403);
     
     $d = CPP_Core::get_chart_data(intval($_GET['product_id']));
-    
     $has=false; foreach(['prices','min_prices','max_prices'] as $k) if(count(array_filter($d[$k], function($v){return $v!==null;}))>0) $has=true;
     
     if(!$has) wp_send_json_error(['message'=>'داده‌ای نیست'], 404); else wp_send_json_success($d);
