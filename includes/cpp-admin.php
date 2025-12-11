@@ -69,12 +69,8 @@ function cpp_product_edit_page() { include CPP_TEMPLATES_DIR . 'product-edit.php
 add_action('admin_init', 'cpp_handle_admin_actions');
 function cpp_handle_admin_actions() {
     global $wpdb; $page = isset($_GET['page']) ? $_GET['page'] : '';
-    // (کدهای افزودن و حذف بدون تغییر - برای خلاصه شدن تکرار نشد اما باید باشند)
-    // لطفا کدهای handle_actions قبلی را اینجا نگه دارید یا از نسخه قبلی استفاده کنید
-    // اگر نیاز است دوباره بفرستم بفرمایید.
-    
-    // کدهای اصلی handle actions اینجا باید باشد...
-     if (isset($_POST['cpp_add_category']) && $page === 'custom-prices-categories') {
+
+    if (isset($_POST['cpp_add_category']) && $page === 'custom-prices-categories') {
         check_admin_referer('cpp_add_cat_action', 'cpp_add_cat_nonce');
         $wpdb->insert(CPP_DB_CATEGORIES, ['name'=>$_POST['name'], 'slug'=>sanitize_title($_POST['slug']?:$_POST['name']), 'image_url'=>$_POST['image_url'], 'created'=>current_time('mysql',1)]);
         wp_redirect(add_query_arg('cpp_message', 'category_added', admin_url('admin.php?page=custom-prices-categories'))); exit;
@@ -101,13 +97,16 @@ function cpp_handle_admin_actions() {
 
 add_action('wp_ajax_cpp_fetch_product_edit_form', 'cpp_fetch_product_edit_form');
 function cpp_fetch_product_edit_form() {
-    check_ajax_referer('cpp_admin_nonce', 'security'); if (!CPP_Core::has_access()) wp_send_json_error(['message'=>'عدم دسترسی'], 403);
-    $product_id = intval($_GET['id']); ob_start(); include CPP_TEMPLATES_DIR . 'product-edit.php'; wp_send_json_success(['html'=>ob_get_clean()]);
+    check_ajax_referer('cpp_admin_nonce', 'security');
+    if (!CPP_Core::has_access()) wp_send_json_error(['message'=>'عدم دسترسی'], 403);
+    $product_id = intval($_GET['id']);
+    ob_start(); include CPP_TEMPLATES_DIR . 'product-edit.php'; wp_send_json_success(['html'=>ob_get_clean()]);
 }
 
 add_action('wp_ajax_cpp_handle_edit_product_ajax', 'cpp_handle_edit_product_ajax');
 function cpp_handle_edit_product_ajax() {
-    check_ajax_referer('cpp_edit_product_action', 'cpp_edit_product_nonce'); if (!CPP_Core::has_access()) wp_send_json_error(['message'=>'عدم دسترسی'], 403);
+    check_ajax_referer('cpp_edit_product_action', 'cpp_edit_product_nonce');
+    if (!CPP_Core::has_access()) wp_send_json_error(['message'=>'عدم دسترسی'], 403);
     global $wpdb; $pid = intval($_POST['product_id']);
     $data = ['cat_id'=>$_POST['cat_id'], 'name'=>$_POST['name'], 'price'=>$_POST['price'], 'min_price'=>$_POST['min_price'], 'max_price'=>$_POST['max_price'], 'product_type'=>$_POST['product_type'], 'unit'=>$_POST['unit'], 'load_location'=>$_POST['load_location'], 'is_active'=>$_POST['is_active'], 'description'=>$_POST['description'], 'image_url'=>$_POST['image_url'], 'last_updated_at'=>current_time('mysql',1)];
     $wpdb->update(CPP_DB_PRODUCTS, $data, ['id'=>$pid]);
@@ -117,22 +116,28 @@ function cpp_handle_edit_product_ajax() {
 
 add_action('wp_ajax_cpp_fetch_category_edit_form', 'cpp_fetch_category_edit_form');
 function cpp_fetch_category_edit_form() {
-    check_ajax_referer('cpp_admin_nonce', 'security'); if (!CPP_Core::has_access()) wp_send_json_error(['message'=>'عدم دسترسی'], 403);
-    $cat_id = intval($_GET['id']); ob_start(); include CPP_TEMPLATES_DIR . 'category-edit.php'; wp_send_json_success(['html'=>ob_get_clean()]);
+    check_ajax_referer('cpp_admin_nonce', 'security');
+    if (!CPP_Core::has_access()) wp_send_json_error(['message'=>'عدم دسترسی'], 403);
+    $cat_id = intval($_GET['id']);
+    ob_start(); include CPP_TEMPLATES_DIR . 'category-edit.php'; wp_send_json_success(['html'=>ob_get_clean()]);
 }
 
 add_action('wp_ajax_cpp_handle_edit_category_ajax', 'cpp_handle_edit_category_ajax');
 function cpp_handle_edit_category_ajax() {
-    check_ajax_referer('cpp_edit_cat_action', 'cpp_edit_cat_nonce'); if (!CPP_Core::has_access()) wp_send_json_error(['message'=>'عدم دسترسی'], 403);
-    global $wpdb; $wpdb->update(CPP_DB_CATEGORIES, ['name'=>$_POST['name'], 'slug'=>sanitize_title($_POST['slug']?:$_POST['name']), 'image_url'=>$_POST['image_url']], ['id'=>intval($_POST['category_id'])]);
+    check_ajax_referer('cpp_edit_cat_action', 'cpp_edit_cat_nonce');
+    if (!CPP_Core::has_access()) wp_send_json_error(['message'=>'عدم دسترسی'], 403);
+    global $wpdb;
+    $wpdb->update(CPP_DB_CATEGORIES, ['name'=>$_POST['name'], 'slug'=>sanitize_title($_POST['slug']?:$_POST['name']), 'image_url'=>$_POST['image_url']], ['id'=>intval($_POST['category_id'])]);
     wp_send_json_success(['message'=>'بروزرسانی شد.']);
 }
 
 add_action('wp_ajax_cpp_quick_update', 'cpp_quick_update');
 function cpp_quick_update() {
-    check_ajax_referer('cpp_admin_nonce', 'security'); if (!CPP_Core::has_access()) wp_send_json_error(['message'=>'عدم دسترسی'], 403);
+    check_ajax_referer('cpp_admin_nonce', 'security');
+    if (!CPP_Core::has_access()) wp_send_json_error(['message'=>'عدم دسترسی'], 403);
     global $wpdb; $id = intval($_POST['id']); $field = $_POST['field']; $val = $_POST['value'];
     $table = ($_POST['table_type']=='products') ? CPP_DB_PRODUCTS : (($_POST['table_type']=='orders') ? CPP_DB_ORDERS : CPP_DB_CATEGORIES);
+    
     $data = [$field => $val];
     if ($_POST['table_type']=='products') {
         $data['last_updated_at'] = current_time('mysql', 1);
@@ -144,7 +149,9 @@ function cpp_quick_update() {
 
 add_action('wp_ajax_cpp_test_email', 'cpp_ajax_test_email');
 function cpp_ajax_test_email() {
-    check_ajax_referer('cpp_admin_nonce', 'security'); if(!CPP_Core::has_access()) wp_send_json_error(['log'=>'عدم دسترسی'], 403);
-    $sent = wp_mail(get_option('cpp_admin_email'), 'Test', 'Test Body'); wp_send_json_success(['log'=>$sent?'Success':'Failed']);
+    check_ajax_referer('cpp_admin_nonce', 'security');
+    if(!CPP_Core::has_access()) wp_send_json_error(['log'=>'عدم دسترسی'], 403);
+    $sent = wp_mail(get_option('cpp_admin_email'), 'Test', 'Test Body');
+    wp_send_json_success(['log'=>$sent?'Success':'Failed']);
 }
 ?>
