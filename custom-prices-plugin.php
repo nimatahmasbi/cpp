@@ -1,10 +1,11 @@
 <?php
 /**
  * Plugin Name: Custom Prices & Orders
- * Description: افزونه مدیریت قیمت، سفارش، نمودار و چند نقش کاربری.
+ * Description: افزونه مدیریت هوشمند قیمت و سفارشات (CPP)،قیمت لحظه‌ای، نمودار قیمت، آهن‌آلات، طلا و ارز، سفارش‌گیری آنلاین، نوسان قیمت، نمایش نوسانات قیمت، نمودار پیشرفته، سفارش‌گیری سریع و اطلاع‌رسانی پیامکی.
  * Version: 3.8.0
  * Author: Mr.NT
  * Author URI: https://21s.ir
+ * Update URI: https://21s.ir/updates/cpp/info.json
  */
 
 if (!defined('ABSPATH')) exit;
@@ -20,19 +21,19 @@ define('CPP_DB_ORDERS', $wpdb->prefix . 'cpp_orders');
 define('CPP_DB_CATEGORIES', $wpdb->prefix . 'cpp_categories');
 define('CPP_DB_PRICE_HISTORY', $wpdb->prefix . 'cpp_price_history');
 
-// بارگذاری فایل‌های هسته
+// بارگذاری فایل‌های اصلی
 require_once(CPP_PATH . 'includes/cpp-core.php');
 require_once(CPP_PATH . 'includes/cpp-admin.php');
 require_once(CPP_PATH . 'includes/cpp-settings.php');
 
-// بارگذاری کلاس‌های اختیاری
+// بارگذاری فایل‌های اختیاری
 if (file_exists(CPP_PATH . 'includes/cpp-email.php')) require_once(CPP_PATH . 'includes/cpp-email.php');
 if (file_exists(CPP_PATH . 'includes/cpp-sms.php')) require_once(CPP_PATH . 'includes/cpp-sms.php');
 
 // بارگذاری کلاس آپدیت خودکار
 if (file_exists(CPP_PATH . 'includes/cpp-updater.php')) require_once(CPP_PATH . 'includes/cpp-updater.php');
 
-// هوک فعال‌سازی
+// فعال‌سازی و تنظیمات اولیه
 register_activation_hook(__FILE__, 'cpp_activate');
 function cpp_activate() {
     CPP_Core::create_db_tables();
@@ -40,11 +41,11 @@ function cpp_activate() {
     if (get_option('cpp_admin_capability') === false) update_option('cpp_admin_capability', ['administrator']);
 }
 
-// راه‌اندازی سیستم آپدیت خودکار
+// راه‌اندازی سیستم آپدیت خودکار از سایت 21s.ir
 add_action('init', 'cpp_init_auto_updater');
 function cpp_init_auto_updater() {
     if (class_exists('CPP_Auto_Updater')) {
-        // آدرس فایل JSON که اطلاعات نسخه جدید در آن قرار دارد
+        // آدرس فایل JSON اطلاعات نسخه جدید
         $json_url = 'https://21s.ir/updates/cpp/info.json'; 
         
         new CPP_Auto_Updater(
@@ -59,15 +60,12 @@ function cpp_init_auto_updater() {
 // شورت‌کدها
 // ---------------------------------------------------------
 
-// 1. شورت‌کد لیست ساده [cpp_products_list]
+// 1. لیست ساده [cpp_products_list]
 add_shortcode('cpp_products_list', 'cpp_products_list_shortcode');
 function cpp_products_list_shortcode($atts) {
-    // دریافت پارامترها برای فیلتر کردن احتمالی (cat_id, ids)
     $atts = shortcode_atts( array( 'cat_id' => '', 'ids' => '', 'status' => '1' ), $atts, 'cpp_products_list' );
     global $wpdb;
     
-    // ساخت کوئری با رعایت فیلترها (در فایل قالب استفاده می‌شود یا اینجا لاجیک گذاشته شود)
-    // برای سادگی و هماهنگی با قالب، کوئری اصلی را اینجا می‌نویسیم
     $where_clauses = []; 
     if ($atts['status'] !== 'all') $where_clauses[] = $wpdb->prepare("p.is_active = %d", intval($atts['status']));
     if (!empty($atts['cat_id'])) $where_clauses[] = "p.cat_id IN (" . esc_sql($atts['cat_id']) . ")";
@@ -75,7 +73,6 @@ function cpp_products_list_shortcode($atts) {
     
     $where_sql = !empty($where_clauses) ? ' WHERE ' . implode(' AND ', $where_clauses) : '';
     
-    // دریافت محصولات (مرتب‌سازی صعودی ID)
     $products = $wpdb->get_results("SELECT p.*, c.name as category_name FROM " . CPP_DB_PRODUCTS . " p LEFT JOIN " . CPP_DB_CATEGORIES . " c ON p.cat_id = c.id {$where_sql} ORDER BY p.id ASC");
 
     if (!$products) return '<p class="cpp-no-products">' . __('محصولی یافت نشد.', 'cpp-full') . '</p>';
@@ -87,13 +84,11 @@ function cpp_products_list_shortcode($atts) {
     return ob_get_clean();
 }
 
-// 2. شورت‌کد گرید با تاریخ [cpp_products_grid_view]
+// 2. گرید با تاریخ [cpp_products_grid_view]
 add_shortcode('cpp_products_grid_view', 'cpp_products_grid_view_shortcode');
 function cpp_products_grid_view_shortcode($atts) {
     global $wpdb;
     $products_per_page = max(1, (int) get_option('cpp_products_per_page', 5)); 
-    
-    // کوئری محصولات فعال (مرتب‌سازی صعودی ID)
     $products = $wpdb->get_results($wpdb->prepare("SELECT * FROM " . CPP_DB_PRODUCTS . " WHERE is_active = 1 ORDER BY id ASC LIMIT %d", $products_per_page));
     $total_products = $wpdb->get_var("SELECT COUNT(id) FROM " . CPP_DB_PRODUCTS . " WHERE is_active = 1");
     $categories = CPP_Core::get_all_categories();
@@ -107,13 +102,11 @@ function cpp_products_grid_view_shortcode($atts) {
     return ob_get_clean();
 }
 
-// 3. شورت‌کد گرید بدون تاریخ [cpp_products_grid_view_no_date]
+// 3. گرید بدون تاریخ [cpp_products_grid_view_no_date]
 add_shortcode('cpp_products_grid_view_no_date', 'cpp_products_grid_view_no_date_shortcode');
 function cpp_products_grid_view_no_date_shortcode($atts) {
     global $wpdb;
     $products_per_page = max(1, (int) get_option('cpp_products_per_page', 5)); 
-    
-    // کوئری محصولات فعال (مرتب‌سازی صعودی ID)
     $products = $wpdb->get_results($wpdb->prepare("SELECT * FROM " . CPP_DB_PRODUCTS . " WHERE is_active = 1 ORDER BY id ASC LIMIT %d", $products_per_page));
     $total_products = $wpdb->get_var("SELECT COUNT(id) FROM " . CPP_DB_PRODUCTS . " WHERE is_active = 1");
     $last_updated_time = $wpdb->get_var("SELECT MAX(last_updated_at) FROM " . CPP_DB_PRODUCTS . " WHERE is_active = 1");
@@ -128,15 +121,10 @@ function cpp_products_grid_view_no_date_shortcode($atts) {
     return ob_get_clean();
 }
 
-// ---------------------------------------------------------
-// بارگذاری فایل‌های استاتیک (JS/CSS) فرانت‌اند
-// ---------------------------------------------------------
+// بارگذاری فایل‌های فرانت‌اند و ارسال متغیر لوگو
 add_action('wp_enqueue_scripts', 'cpp_front_assets');
 function cpp_front_assets() {
-    global $post;
-    $load = false;
-    
-    // شرط بارگذاری: فقط اگر شورت‌کد در صفحه باشد یا المنتور فعال باشد
+    global $post; $load = false;
     if (is_a($post, 'WP_Post') && (has_shortcode($post->post_content, 'cpp_products_list') || has_shortcode($post->post_content, 'cpp_products_grid_view') || has_shortcode($post->post_content, 'cpp_products_grid_view_no_date'))) $load = true;
     if (isset($_GET['elementor-preview'])) $load = true;
 
@@ -147,13 +135,13 @@ function cpp_front_assets() {
         wp_enqueue_script('chart-js', 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js', [], null, true);
         wp_enqueue_script('cpp-front-js', CPP_ASSETS_URL . 'js/front.js', ['jquery', 'chart-js'], CPP_VERSION, true);
 
-        // دریافت لوگو برای نمایش در نمودار
+        // ارسال لوگو به JS برای استفاده در نمودار
         $logo_url = get_option('cpp_default_product_image');
 
         wp_localize_script('cpp-front-js', 'cpp_front_vars', array(
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('cpp_front_nonce'),
-            'logo_url' => $logo_url ? esc_url($logo_url) : '', // ارسال لوگو به JS
+            'logo_url' => $logo_url ? esc_url($logo_url) : '',
             'i18n' => [
                 'sending' => __('در حال ارسال...', 'cpp-full'),
                 'server_error' => __('خطای سرور.', 'cpp-full'),
@@ -165,7 +153,7 @@ function cpp_front_assets() {
     }
 }
 
-// اضافه کردن مودال‌ها و استایل‌های پویا به فوتر
+// افزودن مودال‌ها و استایل‌های داینامیک به فوتر
 add_action('wp_footer', 'cpp_add_modals_to_footer');
 function cpp_add_modals_to_footer() {
     if (wp_script_is('cpp-front-js', 'enqueued')) {
@@ -173,7 +161,6 @@ function cpp_add_modals_to_footer() {
         
         $c1 = get_option('cpp_grid_with_date_button_color', '#ffc107');
         $c2 = get_option('cpp_grid_no_date_button_color', '#0073aa');
-        
         echo "<style>
             .cpp-grid-view-wrapper.with-date-shortcode .filter-btn.active { background-color: $c1 !important; border-color: $c1 !important; color: #fff !important; } 
             .cpp-grid-view-wrapper.no-date-shortcode .filter-btn.active { background-color: $c2 !important; border-color: $c2 !important; color: #fff !important; }
@@ -181,9 +168,7 @@ function cpp_add_modals_to_footer() {
     }
 }
 
-// ---------------------------------------------------------
-// AJAX: بارگذاری بیشتر محصولات (Load More)
-// ---------------------------------------------------------
+// AJAX: بارگذاری بیشتر محصولات (با مرتب‌سازی صحیح)
 add_action('wp_ajax_cpp_load_more_products', 'cpp_load_more_products');
 add_action('wp_ajax_nopriv_cpp_load_more_products', 'cpp_load_more_products');
 function cpp_load_more_products() {
@@ -194,7 +179,6 @@ function cpp_load_more_products() {
     $per_page = max(1, (int) get_option('cpp_products_per_page', 5));
     $offset = ($page - 1) * $per_page;
     
-    // کوئری با رعایت ترتیب صعودی ID
     $products = $wpdb->get_results($wpdb->prepare("SELECT * FROM " . CPP_DB_PRODUCTS . " WHERE is_active=1 ORDER BY id ASC LIMIT %d OFFSET %d", $per_page, $offset));
     
     if ($products) {
@@ -228,7 +212,6 @@ function cpp_load_more_products() {
         }
         $html = ob_get_clean();
         
-        // بررسی وجود صفحات بیشتر
         $total = $wpdb->get_var("SELECT COUNT(id) FROM " . CPP_DB_PRODUCTS . " WHERE is_active=1");
         $has_more = ($page * $per_page) < $total;
         
