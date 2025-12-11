@@ -30,12 +30,13 @@
                      <button type="button" class="cpp-refresh-captcha" title="<?php esc_attr_e('کد جدید', 'cpp-full'); ?>">↺</button>
                      <input type="text" name="captcha_input" id="captcha_input" required maxlength="4" autocomplete="off" class="ltr" style="direction:ltr; text-align:center;">
                  </div>
-                 </div>
+            </div>
 
             <div class="cpp-form-field">
                 <button type="submit"><?php _e('ثبت درخواست', 'cpp-full'); ?></button>
             </div>
-             <div class="cpp-form-message-placeholder" style="margin-top: 15px;"></div> </form>
+             <div class="cpp-form-message-placeholder" style="margin-top: 15px;"></div> 
+        </form>
     </div>
 </div>
 
@@ -43,8 +44,19 @@
      <div class="cpp-modal-container cpp-chart-container">
         <button class="cpp-modal-close">&times;</button>
         <h3><?php _e('نمودار تغییرات قیمت', 'cpp-full'); ?></h3>
+        
+        <div class="cpp-chart-toolbar">
+            <button class="button cpp-chart-filter active" data-range="all"><?php _e('همه', 'cpp-full'); ?></button>
+            <button class="button cpp-chart-filter" data-range="12"><?php _e('۱ سال', 'cpp-full'); ?></button>
+            <button class="button cpp-chart-filter" data-range="6"><?php _e('۶ ماه', 'cpp-full'); ?></button>
+            <button class="button cpp-chart-filter" data-range="3"><?php _e('۳ ماه', 'cpp-full'); ?></button>
+            <button class="button cpp-chart-filter" data-range="1"><?php _e('۱ ماه', 'cpp-full'); ?></button>
+            <button class="button cpp-chart-filter" data-range="0.25"><?php _e('۱ هفته', 'cpp-full'); ?></button>
+            <button class="button button-primary cpp-chart-download"><?php _e('دانلود نمودار', 'cpp-full'); ?></button>
+        </div>
+
         <div class="cpp-chart-inner">
-            <canvas id="cppFrontPriceChart"></canvas>
+            <div class="cpp-chart-bg"></div> <canvas id="cppFrontPriceChart"></canvas>
         </div>
     </div>
 </div>
