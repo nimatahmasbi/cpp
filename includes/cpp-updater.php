@@ -15,9 +15,9 @@ class CPP_Auto_Updater {
         $this->remote_path = $remote_path;
         $this->cache_key = 'cpp_update_' . md5($this->plugin_slug);
 
-        // هوک برای بررسی آپدیت
+        // هوک برای بررسی وجود نسخه جدید
         add_filter('pre_set_site_transient_update_plugins', [$this, 'check_update']);
-        // هوک برای نمایش اطلاعات در پاپ‌آپ جزئیات
+        // هوک برای نمایش اطلاعات افزونه در پاپ‌آپ جزئیات
         add_filter('plugins_api', [$this, 'check_info'], 10, 3);
     }
 
@@ -52,9 +52,14 @@ class CPP_Auto_Updater {
             return $false;
         }
 
-        // بررسی اینکه آیا درخواست برای همین افزونه است (نام فولدر باید چک شود)
-        if (dirname($this->plugin_slug) !== $arg->slug) {
-            return $false;
+        // بررسی اینکه آیا درخواست برای همین افزونه است
+        if (isset($arg->slug) && $arg->slug === $this->plugin_slug) {
+             // slug در اینجا ممکن است فقط نام پوشه باشد، باید دقیق چک شود
+        } 
+        
+        // راه ساده‌تر: اگر اسلاگ درخواست شده با نام پوشه ما یکی بود
+        if (basename(dirname($this->plugin_file)) !== $arg->slug) {
+           // return $false; // برخی اوقات وردپرس فقط نام فایل را می‌فرستد، این شرط را منعطف می‌کنیم
         }
 
         $remote_info = $this->request_info();
@@ -62,7 +67,7 @@ class CPP_Auto_Updater {
         if ($remote_info) {
             $res = new stdClass();
             $res->name = $remote_info->name;
-            $res->slug = $arg->slug;
+            $res->slug = $this->plugin_slug; // استفاده از اسلاگ کامل
             $res->version = $remote_info->version;
             $res->author = $remote_info->author;
             $res->author_profile = $remote_info->author_profile;
@@ -72,6 +77,7 @@ class CPP_Auto_Updater {
             $res->last_updated = $remote_info->last_updated;
             $res->sections = (array) $remote_info->sections;
             $res->download_link = $remote_info->download_url;
+            $res->banners = (array) ($remote_info->banners ?? []);
 
             return $res;
         }
@@ -80,7 +86,7 @@ class CPP_Auto_Updater {
     }
 
     private function request_info() {
-        // بررسی کش برای جلوگیری از کندی
+        // استفاده از ترنزینت برای کش کردن پاسخ و جلوگیری از کندی پیشخوان
         $remote_info = get_transient($this->cache_key);
 
         if (false === $remote_info) {
@@ -97,6 +103,7 @@ class CPP_Auto_Updater {
             $remote_info = json_decode($body);
 
             if ($remote_info) {
+                // کش کردن اطلاعات برای ۱۲ ساعت
                 set_transient($this->cache_key, $remote_info, 12 * HOUR_IN_SECONDS);
             }
         }
