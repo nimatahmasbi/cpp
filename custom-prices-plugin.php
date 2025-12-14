@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Custom Prices & Orders
  * Description: افزونه مدیریت هوشمند قیمت و سفارشات (CPP).
- * Version: 3.9.0
+ * Version: 3.9.1
  * Author: Mr.NT
  * Author URI: https://21s.ir
  * Update URI: https://21s.ir/updates/cpp/info.json
@@ -11,7 +11,7 @@
 if (!defined('ABSPATH')) exit;
 
 global $wpdb;
-define('CPP_VERSION', '3.9.0'); // ارتقای نسخه برای فورس کردن کش
+define('CPP_VERSION', '3.9.1'); 
 define('CPP_PATH', plugin_dir_path(__FILE__));
 define('CPP_URL', plugin_dir_url(__FILE__));
 define('CPP_TEMPLATES_DIR', CPP_PATH . 'templates/');
@@ -42,31 +42,82 @@ function cpp_init_auto_updater() {
     }
 }
 
-// شورت‌کدها (مرتب‌سازی صعودی)
+// شورت‌کد لیست ساده
 add_shortcode('cpp_products_list', 'cpp_products_list_shortcode');
 function cpp_products_list_shortcode($atts) {
     ob_start(); echo '<div class="cpp-table-responsive-wrapper cpp-products-list-wrapper">'; include CPP_TEMPLATES_DIR . 'shortcode-list.php'; echo '</div>'; return ob_get_clean();
 }
 
+// شورت‌کد گرید با تاریخ (اصلاح شده)
 add_shortcode('cpp_products_grid_view', 'cpp_products_grid_view_shortcode');
 function cpp_products_grid_view_shortcode($atts) {
     global $wpdb;
+    
+    // دریافت ورودی‌ها
+    $a = shortcode_atts(array(
+        'cat_id' => '', // پارامتر جدید برای شناسه دسته
+    ), $atts);
+
+    $cat_ids = [];
+    $where_clause = "WHERE is_active = 1";
+
+    // بررسی فیلتر دسته‌بندی
+    if (!empty($a['cat_id'])) {
+        $cat_ids = array_map('intval', explode(',', $a['cat_id']));
+        if (!empty($cat_ids)) {
+            $ids_str = implode(',', $cat_ids);
+            $where_clause .= " AND cat_id IN ($ids_str)";
+        }
+    }
+
     $products_per_page = max(1, (int) get_option('cpp_products_per_page', 5)); 
-    $products = $wpdb->get_results($wpdb->prepare("SELECT * FROM " . CPP_DB_PRODUCTS . " WHERE is_active = 1 ORDER BY id ASC LIMIT %d", $products_per_page));
-    $total_products = $wpdb->get_var("SELECT COUNT(id) FROM " . CPP_DB_PRODUCTS . " WHERE is_active = 1");
+    
+    $products = $wpdb->get_results("SELECT * FROM " . CPP_DB_PRODUCTS . " $where_clause ORDER BY id ASC LIMIT $products_per_page");
+    $total_products = $wpdb->get_var("SELECT COUNT(id) FROM " . CPP_DB_PRODUCTS . " $where_clause");
+    
     $categories = CPP_Core::get_all_categories();
-    ob_start(); echo '<div class="cpp-table-responsive-wrapper cpp-grid-view-date-wrapper">'; include CPP_TEMPLATES_DIR . 'shortcode-grid-view.php'; echo '</div>'; return ob_get_clean();
+    
+    ob_start(); 
+    echo '<div class="cpp-table-responsive-wrapper cpp-grid-view-date-wrapper">'; 
+    include CPP_TEMPLATES_DIR . 'shortcode-grid-view.php'; 
+    echo '</div>'; 
+    return ob_get_clean();
 }
 
+// شورت‌کد گرید بدون تاریخ (اصلاح شده)
 add_shortcode('cpp_products_grid_view_no_date', 'cpp_products_grid_view_no_date_shortcode');
 function cpp_products_grid_view_no_date_shortcode($atts) {
     global $wpdb;
+
+    // دریافت ورودی‌ها
+    $a = shortcode_atts(array(
+        'cat_id' => '', // پارامتر جدید
+    ), $atts);
+
+    $cat_ids = [];
+    $where_clause = "WHERE is_active = 1";
+
+    if (!empty($a['cat_id'])) {
+        $cat_ids = array_map('intval', explode(',', $a['cat_id']));
+        if (!empty($cat_ids)) {
+            $ids_str = implode(',', $cat_ids);
+            $where_clause .= " AND cat_id IN ($ids_str)";
+        }
+    }
+
     $products_per_page = max(1, (int) get_option('cpp_products_per_page', 5)); 
-    $products = $wpdb->get_results($wpdb->prepare("SELECT * FROM " . CPP_DB_PRODUCTS . " WHERE is_active = 1 ORDER BY id ASC LIMIT %d", $products_per_page));
-    $total_products = $wpdb->get_var("SELECT COUNT(id) FROM " . CPP_DB_PRODUCTS . " WHERE is_active = 1");
+    
+    $products = $wpdb->get_results("SELECT * FROM " . CPP_DB_PRODUCTS . " $where_clause ORDER BY id ASC LIMIT $products_per_page");
+    $total_products = $wpdb->get_var("SELECT COUNT(id) FROM " . CPP_DB_PRODUCTS . " $where_clause");
     $last_updated_time = $wpdb->get_var("SELECT MAX(last_updated_at) FROM " . CPP_DB_PRODUCTS . " WHERE is_active = 1");
+    
     $categories = CPP_Core::get_all_categories();
-    ob_start(); echo '<div class="cpp-table-responsive-wrapper cpp-grid-view-nodate-wrapper">'; include CPP_TEMPLATES_DIR . 'shortcode-grid-view-no-date.php'; echo '</div>'; return ob_get_clean();
+    
+    ob_start(); 
+    echo '<div class="cpp-table-responsive-wrapper cpp-grid-view-nodate-wrapper">'; 
+    include CPP_TEMPLATES_DIR . 'shortcode-grid-view-no-date.php'; 
+    echo '</div>'; 
+    return ob_get_clean();
 }
 
 // بارگذاری فایل‌های فرانت‌اند
