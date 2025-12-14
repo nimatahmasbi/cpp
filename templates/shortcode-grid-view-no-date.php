@@ -6,16 +6,42 @@ $cart_icon_url = CPP_ASSETS_URL . 'images/cart-icon.png';
 $chart_icon_url = CPP_ASSETS_URL . 'images/chart-icon.png';
 $show_image = get_option('cpp_grid_no_date_show_image', 1);
 $default_image = get_option('cpp_default_product_image', CPP_ASSETS_URL . 'images/default-product.png');
+
+// دریافت لوگو
+$site_logo_url = get_site_icon_url(512); 
+if (!$site_logo_url) $site_logo_url = $default_image;
+
+// منطق فیلتر دسته‌بندی‌ها
+$show_filters = true;
+if (!empty($cat_ids)) {
+    $categories = array_filter($categories, function($cat) use ($cat_ids) {
+        return in_array($cat->id, $cat_ids);
+    });
+    if (count($cat_ids) === 1) {
+        $show_filters = false;
+    }
+}
 ?>
 
-<div class="cpp-grid-view-wrapper no-date-shortcode">
-    <?php if (!empty($categories) || $last_updated_time) : ?>
+<div class="cpp-grid-view-wrapper no-date-shortcode" style="--cpp-bg-logo: url('<?php echo esc_url($site_logo_url); ?>');">
+    <?php if (($show_filters && !empty($categories)) || $last_updated_time) : ?>
         <div class="cpp-grid-view-filters">
             <?php if ($last_updated_time): ?><span class="last-update-display"><?php echo __('آخرین بروزرسانی:', 'cpp-full') . ' ' . date_i18n('Y/m/d H:i', strtotime(get_date_from_gmt($last_updated_time))); ?></span><?php endif; ?>
-            <a href="#" class="filter-btn active" data-cat-id="all"><?php _e('همه دسته‌ها', 'cpp-full'); ?></a>
-            <?php foreach ($categories as $cat) : ?>
-                <a href="#" class="filter-btn" data-cat-id="<?php echo esc_attr($cat->id); ?>"><?php echo esc_html($cat->name); ?></a>
-            <?php endforeach; ?>
+            
+            <?php if($show_filters && !empty($categories)): ?>
+                <?php if(empty($cat_ids)): ?>
+                    <a href="#" class="filter-btn active" data-cat-id="all"><?php _e('همه دسته‌ها', 'cpp-full'); ?></a>
+                <?php endif; ?>
+                
+                <?php 
+                $first = true;
+                foreach ($categories as $cat) : 
+                    $active_class = (!empty($cat_ids) && $first) ? 'active' : '';
+                    if(!empty($cat_ids)) $first = false;
+                ?>
+                    <a href="#" class="filter-btn <?php echo $active_class; ?>" data-cat-id="<?php echo esc_attr($cat->id); ?>"><?php echo esc_html($cat->name); ?></a>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
 
